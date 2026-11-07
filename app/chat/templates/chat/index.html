@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local AI test page</title>
+  <style>
+    body { font-family: system-ui, "Segoe UI", Arial, sans-serif; max-width: 820px; margin: 24px auto; padding: 0 16px; color: #1f1f1f; }
+    h1 { font-size: 20px; }
+    label { display: block; font-size: 13px; color: #555; margin-top: 12px; }
+    textarea, input[type=number] { width: 100%; box-sizing: border-box; font: inherit; padding: 8px; border: 1px solid #bbb; border-radius: 6px; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .row div { flex: 1; min-width: 160px; }
+    button { margin-top: 12px; padding: 8px 18px; font: inherit; border: 0; border-radius: 6px; background: #1a6fd6; color: #fff; cursor: pointer; }
+    button:disabled { background: #9ab8e0; cursor: wait; }
+    #answer { white-space: pre-wrap; border: 1px solid #ddd; border-radius: 6px; padding: 12px; min-height: 80px; margin-top: 16px; background: #fafafa; }
+    #status { font-size: 13px; color: #555; margin-top: 8px; }
+    .error { color: #b00020 !important; }
+  </style>
+</head>
+<body>
+  <h1>Local AI test page</h1>
+  <p style="font-size:13px;color:#555">Runs fully on this PC. No login. For testing only.</p>
+  {% csrf_token %}
+
+  <label for="system">System prompt</label>
+  <textarea id="system" rows="2">{{ default_system }}</textarea>
+
+  <div class="row">
+    <div>
+      <label for="temperature">Temperature (0 to 1.5)</label>
+      <input id="temperature" type="number" min="0" max="1.5" step="0.1" value="0.3">
+    </div>
+    <div>
+      <label for="max_tokens">Max answer length (tokens)</label>
+      <input id="max_tokens" type="number" min="16" max="1024" step="16" value="300">
+    </div>
+  </div>
+
+  <label for="message">Your question</label>
+  <textarea id="message" rows="6" placeholder="Type or paste text here..."></textarea>
+  <button id="send">Send</button>
+
+  <div id="status"></div>
+  <div id="answer"></div>
+
+  <script>
+    const sendBtn = document.getElementById("send");
+    const answerEl = document.getElementById("answer");
+    const statusEl = document.getElementById("status");
+    const csrf = document.querySelector("[name=csrfmiddlewaretoken]").value;
+
+    sendBtn.addEventListener("click", async () => {
+      const message = document.getElementById("message").value.trim();
+      statusEl.className = "";
+      if (!message) {
+        statusEl.className = "error";
+        statusEl.textContent = "Please type a question.";
+        return;
+      }
+      sendBtn.disabled = true;
+      answerEl.textContent = "";
+      statusEl.textContent = "Model is thinking... this can take a minute on this PC.";
+      try {
+        const resp = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+          body: JSON.stringify({
+            message: message,
+            system: document.getElementById("system").value,
+            temperature: Number(document.getElementById("temperature").value),
+            max_tokens: Number(document.getElementById("max_tokens").value),
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.error) {
+          statusEl.className = "error";
+          statusEl.textContent = data.error || "Something went wrong.";
+        } else {
+          answerEl.textContent = data.reply;   // textContent, not innerHTML
+          statusEl.textContent = "Done in " + data.seconds + " s.";
+        }
+      } catch (err) {
+        statusEl.className = "error";
+        statusEl.textContent = "Could not reach the Django server.";
+      } finally {
+        sendBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

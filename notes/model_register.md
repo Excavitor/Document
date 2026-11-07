@@ -9,23 +9,38 @@
 
 - llama.cpp: C:\local-ai\llama.cpp (llama-server version 0.9.0-dev, build 12186)
 - Model: C:\local-ai\models
+- Project: C:\Users\My Local PC\Desktop\Selim\Document (Django project in the app folder)
 
 ## Server command (current)
 
 ```powershell
 cd C:\local-ai\llama.cpp
-.\llama-server.exe -m C:\local-ai\models\Qwen3-4B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -c 4096 -t 8 -np 1
+.\llama-server.exe -m C:\local-ai\models\Qwen3-4B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -c 4096 -t 8 -np 1 --no-webui
 ```
+
+- --no-webui turns off the built-in web page on port 8080. The API (/v1/chat/completions and /health) still works. Our own Django page is the only interface.
+
+## Django command (current)
+
+```powershell
+cd "C:\Users\My Local PC\Desktop\Selim\Document\app"
+..\.venvDocument\Scripts\Activate.ps1
+python manage.py runserver 127.0.0.1:8000
+```
+
+Page: http://127.0.0.1:8000/ (start llama-server first).
 
 ## Useful commands
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8080/health
 netstat -ano | findstr :8080
+netstat -ano | findstr :8000
 ```
 
 Skip the thinking part by ending a question with /no_think, for example:
 `What is the capital of France? /no_think`
+(Our Django page adds /no_think automatically.)
 
 ## Phase 1 results (2026-11-07)
 
@@ -57,6 +72,7 @@ CPU backend loaded: ggml-cpu-haswell.dll (AVX2). Nothing else running. Build 121
 - A 2,000-token prompt takes about 75 seconds to read (calculated, not measured in a real chat).
 
 ## Phase 2: test question results (2026-11-07)
+
 Settings: -c 4096 -t 8 -np 1, /no_think. Sample document of about 400 words (invented data).
 Peak RAM (llama-server): 4.6 GB.
 
@@ -72,3 +88,15 @@ Peak RAM (llama-server): 4.6 GB.
 - Reading speed about 25 tokens/s on larger prompts; real writing speed about 8 to 9.5 tokens/s.
 - Decision: keep Qwen3 4B Q4_K_M, 8 threads, context 4096 for now (8192 if needed), temperature 0.2 to 0.3 in our own page.
 - Not tested yet: Vulkan build (Vega 11), Gemma 4 26B-A4B, scanned documents.
+
+## Phase 3 results: Django test page (2026-11-08)
+
+Versions: Python 3.12.5, Django 6.1.3, requests 2.34.2 (venv .venvDocument).
+
+- Page at http://127.0.0.1:8000/ with system prompt, temperature, max tokens and a question box. No login (test only).
+- Server on: "What is the capital of France?" answered "Paris" in 2.3 s. A longer answer (cricket) took 8.5 s.
+- llama-server stopped: page shows "The model server is not running. Start llama-server and try again." (Django returns 502, no crash).
+- netstat: Django listens on 127.0.0.1:8000 only.
+- With --no-webui, http://127.0.0.1:8080/ returns 404 "File Not Found". The Django page still works.
+- Django calls llama-server only through chat/llm_client.py, so the model can be swapped later.
+- Next: Phase 4 (streaming, Stop button, timing), then LC check v1.
