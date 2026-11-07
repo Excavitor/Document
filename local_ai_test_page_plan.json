@@ -1,0 +1,809 @@
+{
+  "project": "Local AI Document Assistant - Stage 1: local AI test page, then the LC check page",
+  "version": "1.1",
+  "date": "2026-11-07",
+  "target_os": "Windows 10/11 x64 (your current PC: Ryzen 5 3400G, 32 GB RAM, no dedicated GPU)",
+  "goal": "Build one simple web page, with no login and no permissions, where you type a question and get an answer from a model running fully on your own PC. Then add an LC check page that compares a company's documents with the SWIFT LC (the source of truth). Login and the other big features come after that, phase by phase.",
+  "scope": {
+    "in_this_stage": [
+      "Run llama.cpp (llama-server) on this PC with a small open model",
+      "Django page with a text box and an answer area",
+      "Streamed answers, timing numbers, simple settings",
+      "Offline and privacy check on Windows",
+      "Optional: saved chat history in SQLite",
+      "LC check v1: paste a SWIFT MT700 and a company document and see mismatches with exact highlights"
+    ],
+    "not_in_this_stage": [
+      "Login, users, roles, permissions (added after the LC check works and before anyone else can reach the app)",
+      "Document library, OCR for scans, embeddings, vector search",
+      "General comparison of many document types",
+      "Docker, Nginx, PostgreSQL, bank features"
+    ]
+  },
+  "principles": [
+    "Small steps: every phase ends with something that works and a test you can run.",
+    "Everything stays on this PC. No cloud AI, no external API, no CDN, no telemetry.",
+    "Django and the model server listen on 127.0.0.1 only. Never 0.0.0.0.",
+    "Download software and models once, check them, then run offline. The app never downloads anything.",
+    "Write down measured numbers. Mark estimates as estimates.",
+    "Keep the page code behind one small function (ask_model) so the model or runtime can be swapped later.",
+    "Use only invented (synthetic) LC data for development. Never put real customer documents on this test setup."
+  ],
+  "assumptions": [
+    "Windows 10 or 11, 64-bit, with an administrator account for the firewall step.",
+    "The PC has internet only during setup (downloads). After that it can be disconnected.",
+    "One user, one browser tab at a time (the CPU can only serve about one request at once).",
+    "Estimated day counts assume about 2 to 4 hours of work per day."
+  ],
+  "folder_layout": {
+    "git_project_folder": "C:\\Users\\My Local PC\\Desktop\\Selim\\Document",
+    "tree": {
+      "C:\\Users\\My Local PC\\Desktop\\Selim\\Document\\.venvDocument": "Python virtual environment (already created)",
+      "C:\\Users\\My Local PC\\Desktop\\Selim\\Document\\app": "Django project (manage.py, config/, chat/, later lc_check/)",
+      "C:\\Users\\My Local PC\\Desktop\\Selim\\Document\\notes": "model_register.md, test_prompts.md, benchmark and decision notes",
+      "C:\\Users\\My Local PC\\Desktop\\Selim\\Document\\scripts": "start-llama.ps1, start-app.ps1",
+      "C:\\Users\\My Local PC\\Desktop\\Selim\\Document\\tests\\lc_samples": "invented MT700 files, invoices and the answer key",
+      "C:\\local-ai\\llama.cpp": "llama.cpp Windows CPU build b12186 (kept outside Git)",
+      "C:\\local-ai\\models": "GGUF model files (kept outside Git)"
+    },
+    "git_rule": "Never commit models or llama.cpp binaries. Add .venvDocument/ to .gitignore if it is not ignored yet."
+  },
+  "phases": [
+    {
+      "id": 0,
+      "name": "Prepare the Windows PC",
+      "goal": "Know what the PC can do and install the basic tools.",
+      "estimated_effort": "0.5 day (estimate)",
+      "prerequisites": [],
+      "steps": [
+        {
+          "n": 1,
+          "do": "Record CPU, cores and RAM so every later benchmark has a baseline.",
+          "commands": [
+            "Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors",
+            "Get-CimInstance Win32_ComputerSystem | Select-Object @{n='RAM_GB';e={[math]::Round($_.TotalPhysicalMemory/1GB,1)}}"
+          ],
+          "notes": "Ryzen 5 3400G has 4 cores / 8 threads and supports AVX2 (no AVX-512). Check RAM is running dual-channel (two matching sticks); it affects answer speed."
+        },
+        {
+          "n": 2,
+          "do": "Install Python 3.12 (64-bit) from python.org and tick 'Add python.exe to PATH'. Install Git only if you want version control.",
+          "commands": [
+            "py -3.12 --version"
+          ],
+          "notes": "Use a Python version that Django and your libraries support at the time you start. Check this once."
+        },
+        {
+          "n": 3,
+          "do": "Create the folders from folder_layout.",
+          "commands": [
+            "New-Item -ItemType Directory -Force C:\\local-ai\\llama.cpp, C:\\local-ai\\models, C:\\local-ai\\app, C:\\local-ai\\notes, C:\\local-ai\\scripts"
+          ]
+        },
+        {
+          "n": 4,
+          "do": "Free disk space and close heavy programs while testing.",
+          "notes": "Windows itself uses roughly 3 to 4 GB of RAM (estimate). A 4B model at 4-bit needs about 2.5 GB, so RAM is not a problem for the first model."
+        },
+        {
+          "n": 5,
+          "do": "Make a notes file C:\\local-ai\\notes\\model_register.md with columns: model name, source URL, licence, file name, SHA-256, date downloaded."
+        }
+      ],
+      "deliverables": [
+        "Folders created",
+        "Python works",
+        "Hardware baseline written in notes"
+      ],
+      "exit_criteria": [
+        "py -3.12 --version prints a version",
+        "CPU and RAM details saved in notes"
+      ],
+      "risks": [
+        "Single-channel RAM makes answers slower; check and fix before judging the model."
+      ],
+      "status": "done",
+      "completed": "2026-11-07",
+      "results": [
+        "CPU: AMD Ryzen 5 3400G, 4 cores, 8 threads.",
+        "Python 3.12.5 works (.venvDocument inside the Git project).",
+        "Folders created: C:\\local-ai\\llama.cpp, C:\\local-ai\\models; notes and scripts folders in the project.",
+        "model_register.md created."
+      ]
+    },
+    {
+      "id": 1,
+      "name": "Run the model alone (no code yet)",
+      "goal": "Get a local model answering questions with only llama.cpp, before writing any Django code.",
+      "estimated_effort": "0.5 to 1 day (estimate)",
+      "prerequisites": [
+        "Phase 0 done"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "do": "Download the llama.cpp Windows x64 CPU build from the official ggml-org/llama.cpp GitHub releases page and unzip it into C:\\local-ai\\llama.cpp.",
+          "notes": "Pick the zip that says Windows x64 CPU. The exact file name changes with each release (it looks like llama-bNNNN-bin-win-cpu-x64.zip). Download only from the official repository. Write the release tag in your notes and do not auto-update."
+        },
+        {
+          "n": 2,
+          "do": "Download the model file Qwen3-4B Q4_K_M (about 2.5 GB) from the ggml-org/Qwen3-4B-GGUF page on Hugging Face (listed as Apache 2.0) and save it in C:\\local-ai\\models.",
+          "notes": "Download it in the browser, or use the -hf option once during setup only. Never use -hf from the app. Confirm the licence on the model card for the exact file you use."
+        },
+        {
+          "n": 3,
+          "do": "Check the file hash and record it.",
+          "commands": [
+            "Get-FileHash C:\\local-ai\\models\\<model-file>.gguf -Algorithm SHA256"
+          ],
+          "notes": "Compare with the hash shown by the publisher if one is listed, and save it in model_register.md."
+        },
+        {
+          "n": 4,
+          "do": "Start the server on loopback only.",
+          "commands": [
+            "cd C:\\local-ai\\llama.cpp",
+            ".\\llama-server.exe -m C:\\local-ai\\models\\<model-file>.gguf --host 127.0.0.1 --port 8080 -c 4096 -t 4"
+          ],
+          "notes": "-c is the context size, -t is the number of CPU threads. Windows may show a firewall prompt the first time. Click Cancel or Block, because the server only needs loopback (127.0.0.1) and does not need to be reachable from other devices. If Windows SmartScreen warns about the exe, check that it came from the official release."
+        },
+        {
+          "n": 5,
+          "do": "Open http://127.0.0.1:8080 in your browser (llama-server has a small built-in chat page) and ask 5 simple questions.",
+          "notes": "Watch the startup log: it should list your CPU features (AVX2). Qwen3 may print a long 'thinking' section first. Add /no_think at the end of your question to turn this off for now (or check llama-server --help for a reasoning setting in your build)."
+        },
+        {
+          "n": 6,
+          "do": "Check the health endpoint from a second PowerShell window.",
+          "commands": [
+            "Invoke-RestMethod http://127.0.0.1:8080/health"
+          ]
+        }
+      ],
+      "deliverables": [
+        "llama-server runs",
+        "Model answers in the built-in chat page",
+        "Model register filled in"
+      ],
+      "exit_criteria": [
+        "5 questions answered correctly in plain English",
+        "Server only listens on 127.0.0.1 (check with: netstat -ano | findstr :8080)",
+        "Hash and licence saved in notes"
+      ],
+      "risks": [
+        "Missing DLL or crash on start: you probably downloaded the wrong build (GPU build instead of CPU). Use the CPU build.",
+        "Port 8080 already used: change --port and use the new port everywhere."
+      ],
+      "status": "done",
+      "completed": "2026-11-07",
+      "results": [
+        "llama.cpp release b12186 (llama-b12186-bin-win-cpu-x64.zip) installed in C:\\local-ai\\llama.cpp.",
+        "Model: Qwen3-4B-Q4_K_M.gguf from ggml-org/Qwen3-4B-GGUF (2,497,280,640 bytes, SHA-256 AB27B9BFA375A178D6CBA48F3AD892B94B7739659DCC7AAE8058CE0FFED6B328).",
+        "Server listens on 127.0.0.1:8080 only; /health returned ok.",
+        "Works with the internet turned off.",
+        "/no_think at the end of a question skips the thinking part.",
+        "The 4.10K limit in the chat page is the -c 4096 context size set locally."
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Measure speed and choose settings",
+      "goal": "Find out if the model is fast enough on this PC, using real numbers instead of guesses.",
+      "estimated_effort": "0.5 to 1 day (estimate)",
+      "prerequisites": [
+        "Phase 1 done"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "do": "Run the llama.cpp benchmark tool with 4 and 8 threads.",
+          "commands": [
+            ".\\llama-bench.exe -m C:\\local-ai\\models\\<model-file>.gguf -p 512,2048 -n 128 -t 4,8"
+          ],
+          "notes": "pp numbers are prompt reading speed (tokens per second). tg numbers are answer writing speed. Save the full output in notes."
+        },
+        {
+          "n": 2,
+          "do": "Create a fixed set of 6 test questions in C:\\local-ai\\notes\\test_prompts.md and use the same set for every model.",
+          "notes": "Suggested set: (1) a short factual question, (2) a question with a pasted paragraph of about 500 words, (3) a question with a pasted text of about 2,000 words, (4) a question whose answer is not in the pasted text, (5) a name/date/amount extraction from pasted text, (6) a follow-up that depends on the previous answer."
+        },
+        {
+          "n": 3,
+          "do": "For each test question note: time to first word, total time, tokens per second, RAM used (Task Manager), and whether the answer was correct.",
+          "notes": "Use a table in your notes. Run each test twice; the first run includes loading time."
+        },
+        {
+          "n": 4,
+          "do": "Pick default settings: threads (4 or 8, whichever is faster), context size (start with 4096), temperature 0.2 to 0.3 for factual answers.",
+          "notes": "Do not use a huge context. Reading long text is the slow part on this CPU."
+        },
+        {
+          "n": 5,
+          "do": "Optional quick experiment: try the Windows x64 Vulkan build of llama.cpp with the Vega 11 integrated graphics and compare speed.",
+          "notes": "Gains are uncertain because the integrated GPU shares system RAM. Keep the CPU build as the default unless the numbers clearly improve and answers stay correct.",
+          "status": "skipped (optional); can be tried later"
+        }
+      ],
+      "deliverables": [
+        "benchmark_results.md with real numbers",
+        "Chosen thread count, context size, temperature"
+      ],
+      "exit_criteria": [
+        "You can state: 'on my PC this model reads X tokens/s and writes Y tokens/s'",
+        "You decided if the speed is acceptable for a test page"
+      ],
+      "risks": [
+        "Very slow reading of long prompts is normal on this CPU. Plan short prompts.",
+        "Other programs (browser tabs, antivirus scan) can distort results. Close them and repeat."
+      ],
+      "status": "done",
+      "completed": "2026-11-07",
+      "results": {
+        "llama_bench_tokens_per_second": {
+          "threads_4": {
+            "pp512": 22.23,
+            "pp2048": 19.43,
+            "tg128": 10.26
+          },
+          "threads_8": {
+            "pp512": 27.35,
+            "pp2048": 26.25,
+            "tg128": 12.68
+          }
+        },
+        "cpu_backend": "ggml-cpu-haswell.dll (AVX2)",
+        "peak_ram_llama_server_gb": 4.6,
+        "six_test_questions": "All answered correctly, including saying a nominee is not mentioned in the document.",
+        "real_chat_speed": "reading about 25 tokens/s; writing about 8 to 9.5 tokens/s; about 21 s to the first word for a 500-token document; follow-ups 3 to 5 s",
+        "decisions": [
+          "Use 8 threads, context 4096 (raise to 8192 only if needed), one request at a time (-np 1).",
+          "Temperature 0.2 to 0.3 for factual answers in our own page.",
+          "Keep Qwen3 4B Q4_K_M for now."
+        ],
+        "server_command": ".\\llama-server.exe -m C:\\local-ai\\models\\Qwen3-4B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -c 4096 -t 8 -np 1"
+      }
+    },
+    {
+      "id": 3,
+      "name": "Minimal Django test page",
+      "goal": "One page: text box, Send button, answer area. No login, no database.",
+      "estimated_effort": "1 to 2 days (estimate)",
+      "prerequisites": [
+        "Phase 2 done",
+        "llama-server running on 127.0.0.1:8080 with the Phase 2 server command"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "do": "Use the existing virtual environment in your Git project and install the packages.",
+          "commands": [
+            "cd \"C:\\Users\\My Local PC\\Desktop\\Selim\\Document\"",
+            ".\\.venvDocument\\Scripts\\Activate.ps1",
+            "pip install django requests",
+            "pip freeze > requirements.txt"
+          ],
+          "notes": "If PowerShell blocks the activate script, run once in this window: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass. Commit requirements.txt to Git."
+        },
+        {
+          "n": 2,
+          "do": "Create the Django project and the chat app inside an app folder of your Git project.",
+          "commands": [
+            "mkdir app",
+            "cd app",
+            "django-admin startproject config .",
+            "python manage.py startapp chat"
+          ]
+        },
+        {
+          "n": 3,
+          "do": "Set safe local settings in config/settings.py.",
+          "notes": "ALLOWED_HOSTS = ['127.0.0.1', 'localhost']. Keep DEBUG on for now but never bind to 0.0.0.0. Read the model server address from one setting, LLAMA_SERVER_URL = 'http://127.0.0.1:8080'. Keep Django's CSRF protection on and send the token with the page's fetch call."
+        },
+        {
+          "n": 4,
+          "do": "Write one small function ask_model(messages, temperature, max_tokens) in chat/llm_client.py that calls llama-server.",
+          "notes": "Use a timeout of several minutes because a long prompt can take a while on this CPU. Return a clear error message if the server is not running."
+        },
+        {
+          "n": 5,
+          "do": "Add two routes: GET / (the page) and POST /api/chat (returns JSON).",
+          "notes": "Page = one template with a textarea, a Send button and an answer box. Use plain JavaScript and no CDN. Save any CSS or JS in the app's static folder."
+        },
+        {
+          "n": 6,
+          "do": "Run Django and test.",
+          "commands": [
+            "python manage.py runserver 127.0.0.1:8000"
+          ],
+          "notes": "Open http://127.0.0.1:8000 in the browser."
+        }
+      ],
+      "api_contract": {
+        "browser_to_django": {
+          "method": "POST",
+          "url": "/api/chat",
+          "request_body": {
+            "message": "What is the capital of France?",
+            "system": "You are a helpful assistant. Answer briefly in English.",
+            "temperature": 0.3,
+            "max_tokens": 300
+          },
+          "response_body": {
+            "reply": "The capital of France is Paris.",
+            "seconds": 12.4,
+            "error": null
+          }
+        },
+        "django_to_llama_server": {
+          "method": "POST",
+          "url": "http://127.0.0.1:8080/v1/chat/completions",
+          "request_body": {
+            "messages": [
+              {
+                "role": "system",
+                "content": "You are a helpful assistant. Answer briefly in English."
+              },
+              {
+                "role": "user",
+                "content": "What is the capital of France? /no_think"
+              }
+            ],
+            "temperature": 0.3,
+            "max_tokens": 300,
+            "stream": false
+          }
+        }
+      },
+      "deliverables": [
+        "Working page that returns a model answer",
+        "requirements.txt"
+      ],
+      "exit_criteria": [
+        "A typed question returns an answer in the page",
+        "If llama-server is stopped, the page shows a friendly error and does not crash",
+        "Only 127.0.0.1 is used (check netstat -ano | findstr :8000)"
+      ],
+      "risks": [
+        "Browser seems frozen on long answers: that is fixed by streaming in the next phase.",
+        "Django dev server is only for local testing, not for real use."
+      ],
+      "status": "next"
+    },
+    {
+      "id": 4,
+      "name": "Streaming answers, settings and timing display",
+      "goal": "Make the page feel like a chat and show the numbers you need to judge the model.",
+      "estimated_effort": "1 to 2 days (estimate)",
+      "prerequisites": [
+        "Phase 3 done"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "do": "Switch to streaming: send 'stream': true to llama-server and pass the text to the browser piece by piece (Django StreamingHttpResponse; read the stream in the browser with fetch).",
+          "notes": "Test through runserver first. If words appear only at the end, a buffer is in the way; check for response buffering."
+        },
+        {
+          "n": 2,
+          "do": "Add a Stop button that cancels the request.",
+          "notes": "This matters on a CPU, because a wrong long answer wastes minutes."
+        },
+        {
+          "n": 3,
+          "do": "Add a small settings panel: system prompt, temperature, max answer length.",
+          "notes": "Keep defaults from Phase 2."
+        },
+        {
+          "n": 4,
+          "do": "Show timing under each answer: time to first word, total time, approximate tokens per second.",
+          "notes": "You can measure time in the browser. If the llama-server response includes a 'timings' section, show those values as well."
+        },
+        {
+          "n": 5,
+          "do": "Keep the conversation in the browser page memory and send the last few messages with each request (not the whole history).",
+          "notes": "A longer history means a longer prompt and a slower answer."
+        },
+        {
+          "n": 6,
+          "do": "Show 'Model is thinking...' while waiting and disable the Send button during a request.",
+          "notes": "One request at a time is the right design for this CPU."
+        },
+        {
+          "n": 7,
+          "do": "Escape the model's text before showing it in the page (use textContent, not innerHTML).",
+          "notes": "This prevents script injection from model output."
+        }
+      ],
+      "deliverables": [
+        "Streaming chat page with Stop button, settings and timing"
+      ],
+      "exit_criteria": [
+        "First words appear while the answer is still being written",
+        "Stop button works",
+        "Timing line shown for every answer"
+      ],
+      "risks": [
+        "Streaming code is the trickiest part of this stage. Test with short prompts first."
+      ],
+      "status": "not started"
+    },
+    {
+      "id": 5,
+      "name": "Offline and privacy check on Windows",
+      "goal": "Prove that nothing leaves your PC while you use the page.",
+      "estimated_effort": "0.5 to 1 day (estimate)",
+      "prerequisites": [
+        "Phase 4 done"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "do": "Block outbound internet for the two programs that matter, using Windows Firewall (run PowerShell as Administrator).",
+          "commands": [
+            "New-NetFirewallRule -DisplayName 'LocalAI block llama-server out' -Direction Outbound -Program 'C:\\local-ai\\llama.cpp\\llama-server.exe' -Action Block",
+            "New-NetFirewallRule -DisplayName 'LocalAI block python out' -Direction Outbound -Program 'C:\\Users\\My Local PC\\Desktop\\Selim\\Document\\.venvDocument\\Scripts\\python.exe' -Action Block"
+          ],
+          "notes": "Loopback traffic (127.0.0.1) should still work. Test this. If the page stops working, check the rules and the program paths."
+        },
+        {
+          "n": 2,
+          "do": "Turn off Wi-Fi or unplug the network cable and use the page for 10 questions.",
+          "notes": "Everything must still work. This is your main offline proof."
+        },
+        {
+          "n": 3,
+          "do": "List the network connections of both programs while a question is running.",
+          "commands": [
+            "Get-Process llama-server, python | Select-Object Id, ProcessName",
+            "netstat -ano | findstr \"<pid>\""
+          ],
+          "notes": "Replace <pid> with each process ID. You should see only 127.0.0.1 connections and listening ports."
+        },
+        {
+          "n": 4,
+          "do": "Optional stronger proof: capture traffic with Wireshark while you use the page, with the network connected, and check there is no traffic from your programs to the internet.",
+          "notes": "Wireshark is free; install it on the PC only if you want this test."
+        },
+        {
+          "n": 5,
+          "do": "Check the code: no external URLs in templates or JavaScript, no CDN, no web fonts. Search your project for 'http' and 'https'.",
+          "commands": [
+            "Select-String -Path \"C:\\Users\\My Local PC\\Desktop\\Selim\\Document\\app\\*\" -Pattern 'https?://' -Recurse"
+          ]
+        },
+        {
+          "n": 6,
+          "do": "Write what you tested and the results in notes\\offline_test.md.",
+          "notes": "Be honest: this shows your two programs do not send data out. Windows itself, other programs and drivers still use the internet when it is connected. For a stronger claim, keep the PC offline."
+        }
+      ],
+      "deliverables": [
+        "offline_test.md with date, steps and results"
+      ],
+      "exit_criteria": [
+        "The page works with the network disconnected",
+        "netstat shows only loopback connections for your two programs",
+        "No external URLs in the code"
+      ],
+      "risks": [
+        "Windows is not designed to be a locked-down offline server. A bank-level guarantee needs Linux and network-level controls later."
+      ],
+      "status": "not started (a basic offline test already passed in Phase 1)"
+    },
+    {
+      "id": 6,
+      "name": "Save chats in SQLite (optional, still no login)",
+      "goal": "Keep conversations after you close the browser, using Django's built-in SQLite.",
+      "estimated_effort": "1 day (estimate)",
+      "prerequisites": [
+        "Phase 5 done"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "do": "Add two models: Conversation (title, created time) and Message (conversation, role, text, created time, seconds taken).",
+          "commands": [
+            "python manage.py makemigrations",
+            "python manage.py migrate"
+          ]
+        },
+        {
+          "n": 2,
+          "do": "Save each question and answer, and show a list of past conversations at the left of the page."
+        },
+        {
+          "n": 3,
+          "do": "Add a Delete button for a conversation that removes its messages.",
+          "notes": "Plan deletion now. It will matter when documents are added."
+        },
+        {
+          "n": 4,
+          "do": "Do not write prompts or answers to log files."
+        }
+      ],
+      "deliverables": [
+        "Conversations survive a restart"
+      ],
+      "exit_criteria": [
+        "Restart Django and the PC, and old chats still open",
+        "Deleting a chat removes it from the database"
+      ],
+      "risks": [
+        "Saved chats are sensitive data. Keep the project folder on an encrypted disk (BitLocker) when real documents are added."
+      ],
+      "status": "optional"
+    },
+    {
+      "id": 7,
+      "name": "Compare models and write the decision",
+      "goal": "Choose the model to keep, using your own numbers.",
+      "estimated_effort": "1 day (estimate)",
+      "prerequisites": [
+        "Phase 4 done"
+      ],
+      "steps": [
+        {
+          "n": 1,
+          "do": "Add a model dropdown to the page that reads from a small list in settings. Start a second llama-server on another port for each extra model, one at a time, since RAM is limited.",
+          "notes": "Never run two large models together on 32 GB."
+        },
+        {
+          "n": 2,
+          "do": "Download and test Gemma 4 26B-A4B (about 16 to 18 GB at 4-bit, reported by secondary sources) next to Qwen3 4B, using the same 6 test questions.",
+          "notes": "Check the official model card and licence of the exact file first. Close other programs while testing, because the model uses most of your free RAM."
+        },
+        {
+          "n": 3,
+          "do": "Fill a comparison table: speed, RAM, answer quality, and behaviour when the answer is not in the text.",
+          "notes": "Judge by your own questions, not by leaderboard scores."
+        },
+        {
+          "n": 4,
+          "do": "Write a short decision note (an ADR): chosen model, exact file, hash, llama.cpp build, settings, and why."
+        }
+      ],
+      "deliverables": [
+        "model_comparison.md",
+        "decision note (ADR) with the chosen model and settings"
+      ],
+      "exit_criteria": [
+        "One model chosen, with numbers to support it",
+        "Rule used: the smallest model that is accurate and fast enough"
+      ],
+      "risks": [
+        "A bigger model can be much slower at reading prompts even when it fits in RAM."
+      ],
+      "status": "later"
+    }
+  ],
+  "later_phases": [
+    {
+      "id": "L1",
+      "name": "Upload text, Word and text-PDF files (needed for LC check v1.1)",
+      "idea": "Add upload for TXT, DOCX and text PDFs, store files in a private folder named by SHA-256, and use the extracted text for the LC check and for questions. Keep small files only."
+    },
+    {
+      "id": "L2",
+      "name": "More documents, Excel, images and OCR",
+      "idea": "Add pdfplumber or pypdfium2 for PDF text, openpyxl for XLSX, Pillow + Tesseract for images and scanned pages. Avoid PyMuPDF because of its AGPL licence. Keep page and sheet numbers. The model reads text only, so images go through OCR first."
+    },
+    {
+      "id": "L3",
+      "name": "Document library and selecting earlier uploads",
+      "idea": "Document table, list page, delete that removes the file and all extracted data, and a way to pick documents for a conversation or an LC check."
+    },
+    {
+      "id": "L4",
+      "name": "Retrieval (RAG)",
+      "idea": "Chunk text, create embeddings with a small local model, search only the selected documents, answer with page citations and say 'not found' when needed. Write an ADR on SQLite+ChromaDB versus PostgreSQL+pgvector before this step; the earlier recommendation is PostgreSQL+pgvector."
+    },
+    {
+      "id": "L5",
+      "name": "General document comparison",
+      "idea": "Reuse the LC comparison code for other document pairs: extract fields at upload, compare with Python (RapidFuzz for names), show page evidence side by side, use the model only to explain. Test with documents where you inject known errors."
+    },
+    {
+      "id": "L6",
+      "name": "Login, roles, hardening and move to Linux",
+      "idea": "Add login and per-user access before anyone else can reach the app, encrypt the disk, add an audit log, then move to Ubuntu LTS and add the bank-oriented controls from the main architecture document only when needed."
+    }
+  ],
+  "verify_before_use": [
+    "The current llama-server options for your build (run llama-server --help); the speed numbers are now measured in the progress section.",
+    "The exact model file name, licence text and SHA-256 for every new model you download.",
+    "How to turn off Qwen3 thinking in your build; /no_think works for now.",
+    "That the Windows Firewall rules do not break loopback traffic on your PC (Phase 5 tests this).",
+    "The MT700 tag list and the discrepancy rules and tolerances against the bank's SWIFT guide and trade-finance policy, with a trade-finance officer.",
+    "How MT707 amendments should be applied."
+  ],
+  "progress": {
+    "phase_0": "done 2026-11-07",
+    "phase_1": "done 2026-11-07",
+    "phase_2": "done 2026-11-07 (optional Vulkan test skipped)",
+    "phase_3": "next",
+    "later": "not started"
+  },
+  "recommended_order": [
+    "Phase 3: minimal Django test page",
+    "Phase 4: streaming, settings and timing",
+    "LC check v1 (see lc_check_plan; paste text into two boxes)",
+    "LC check v1.1: upload TXT, DOCX or text PDF (later phase L1)",
+    "Phase 5: offline and privacy check on Windows",
+    "Phase 6 (optional): save chats in SQLite",
+    "Phase 7: compare models (Gemma 4 26B-A4B)",
+    "More documents and OCR, library, retrieval, general comparison",
+    "Login, hardening and move to Linux (before anyone else uses it)"
+  ],
+  "lc_check_plan": {
+    "name": "LC check (Letter of Credit document check)",
+    "why": "Banks must check the documents a local company presents against the Letter of Credit that a foreign bank sent by SWIFT. Doing this by hand is slow and mistakes are costly. The tool should find mismatches quickly and point to the exact place on both sides.",
+    "when_to_build": "Right after the normal Django frontend (Phases 3 and 4) works, and before any login or authentication system. The no-login version is only for one local PC with synthetic test data.",
+    "source_of_truth": "The SWIFT LC (usually an MT700 message), plus any later amendments (MT707). Apply the amendments first, then compare.",
+    "side_to_check": "The documents the local company presents (start with the commercial invoice; later bill of lading, packing list, certificate of origin and others that field 46A requires).",
+    "flow": [
+      "Foreign (issuing) bank sends the LC as an MT700 to the local bank",
+      "Local bank advises it to the local company (the exporter)",
+      "Company prepares documents and presents them to the local bank",
+      "Local bank checks the documents against the SWIFT LC and reports discrepancies"
+    ],
+    "design_idea": "A separate LC Check page with two panes: the SWIFT LC (truth) on the left and the company document (to be checked) on the right, with a findings list in the middle or below. Clicking a finding highlights the matching text on both sides.",
+    "core_approach": [
+      "MT700 is structured, so parse it by field tag with Python (not with the AI).",
+      "Extract the matching fields from the company document with rules first, and use the AI only where text is free-form.",
+      "Compare field by field in Python with explicit rules (exact, numeric tolerance, fuzzy name, date rules, normalised match).",
+      "Use the AI only for free-text clauses (goods description, additional conditions) and to explain each finding in plain words, and always check that the quoted evidence really exists in the source text.",
+      "Show evidence (page and position) for every finding. A human trade-finance officer makes the final decision."
+    ],
+    "fields_to_compare_v1": [
+      {
+        "field": "Documentary credit number",
+        "swift_tag": "20",
+        "compare": "exact"
+      },
+      {
+        "field": "Currency and amount",
+        "swift_tag": "32B",
+        "compare": "currency exact; amount numeric, with the tolerance allowed by tag 39A if present"
+      },
+      {
+        "field": "Applicant (buyer)",
+        "swift_tag": "50",
+        "compare": "normalised and fuzzy name match; flag any difference for review"
+      },
+      {
+        "field": "Beneficiary (seller)",
+        "swift_tag": "59",
+        "compare": "normalised and fuzzy name match; flag any difference for review"
+      },
+      {
+        "field": "Expiry date and place",
+        "swift_tag": "31D",
+        "compare": "date rule (document dates must be on or before expiry)"
+      },
+      {
+        "field": "Latest date of shipment",
+        "swift_tag": "44C",
+        "compare": "date rule"
+      },
+      {
+        "field": "Port of loading / port of discharge",
+        "swift_tag": "44E, 44F",
+        "compare": "normalised place-name match"
+      },
+      {
+        "field": "Description of goods",
+        "swift_tag": "45A",
+        "compare": "AI check with quoted evidence, plus rules for quantity, unit price and total; officer reviews"
+      },
+      {
+        "field": "Documents required",
+        "swift_tag": "46A",
+        "compare": "checklist: is each required document present"
+      },
+      {
+        "field": "Additional conditions",
+        "swift_tag": "47A",
+        "compare": "AI check of each condition with quoted evidence; always shown to the officer"
+      },
+      {
+        "field": "Partial shipments / transhipment",
+        "swift_tag": "43P, 43T",
+        "compare": "condition check against the shipping document"
+      },
+      {
+        "field": "Presentation period",
+        "swift_tag": "48",
+        "compare": "date rule"
+      }
+    ],
+    "finding_statuses": [
+      "MATCH",
+      "MINOR_VARIATION",
+      "MISMATCH",
+      "MISSING",
+      "NEEDS_REVIEW"
+    ],
+    "cautions": [
+      "Not every difference is a real discrepancy. Trade rules allow some tolerance, so the tool flags and classifies; the officer decides.",
+      "The exact discrepancy rules and tolerances must come from the bank's own trade-finance policy and the standard rules it follows (for example UCP 600 practice). Confirm them with a trade-finance officer before treating results as final.",
+      "OCR errors can create false mismatches, so show the page image beside each finding and a confidence score.",
+      "Use only invented (synthetic) LCs and documents for development and testing. Never use real customer data on this test setup.",
+      "The tag list above is the common MT700 field set and must be confirmed against the bank's SWIFT message guide."
+    ],
+    "speed_note": "The model reads about 25 tokens per second on this PC (measured). Every AI call on a 600-token document costs roughly 25 seconds of reading before the first word (calculated from the measured speed). So do as much as possible in Python and call the AI only for a few free-text fields.",
+    "position_in_order": "After Phase 4, before Phase 5 and before any login system",
+    "v1_scope": "SWIFT MT700 text (pasted) versus a commercial invoice (pasted text); invented data only; no login. v1.1 adds upload of TXT, DOCX and text PDF.",
+    "steps": [
+      {
+        "id": "LC-0",
+        "name": "Make synthetic test data",
+        "do": "Write 3 invented MT700 messages and, for each, a matching commercial invoice. Then make copies of each invoice with one seeded error at a time.",
+        "seeded_error_types": [
+          "buyer or seller name spelled differently",
+          "swapped given and family names",
+          "amount higher than the LC amount",
+          "different currency",
+          "LC number with one changed digit",
+          "invoice dated after the expiry date",
+          "shipment date after the latest shipment date",
+          "different port of loading or discharge",
+          "goods description with a changed quantity or item",
+          "a required document missing",
+          "an additional condition not met"
+        ],
+        "deliverable": "A tests/lc_samples folder with the files and an answer key (which error is in which file)",
+        "exit_criteria": "At least 20 test pairs with a written answer key"
+      },
+      {
+        "id": "LC-1",
+        "name": "MT700 parser",
+        "do": "Write a Python function that reads MT700 text and returns its fields by tag (20, 31D, 32B, 39A, 43P, 43T, 44C, 44E, 44F, 45A, 46A, 47A, 48, 50, 59 and so on), including multi-line fields. Add a function that applies an MT707 amendment on top.",
+        "deliverable": "lc_parser module with unit tests",
+        "exit_criteria": "All fields from the sample MT700 files are parsed correctly; the amendment test passes"
+      },
+      {
+        "id": "LC-2",
+        "name": "Extract fields from the company document",
+        "do": "For the commercial invoice, extract the LC reference, buyer, seller, amount, currency, goods description, quantity, ports and dates. Use rules and regular expressions first. Use the AI with a JSON-only answer format for the fields that rules cannot find. Store each value with its source location.",
+        "deliverable": "invoice_extractor module with tests",
+        "exit_criteria": "Correct values on the sample invoices, each with the page or line where it was found"
+      },
+      {
+        "id": "LC-3",
+        "name": "Comparison engine",
+        "do": "Normalise values (case, spaces, accents, titles, date and number formats). Compare each field with its rule from fields_to_compare_v1 and give a status. Check that required documents are listed. Keep the rules in one configuration file so the bank can adjust them.",
+        "deliverable": "lc_compare module with unit tests",
+        "exit_criteria": "Every seeded error in the test data is reported with the right status and field"
+      },
+      {
+        "id": "LC-4",
+        "name": "LC Check page (no login yet)",
+        "do": "Build a Django page with two panes (SWIFT LC on the left, company document on the right). v1: paste text into each box. v1.1: upload TXT, DOCX or text PDF. Show a findings table; clicking a finding highlights the matching text on both sides.",
+        "deliverable": "Working LC Check page on 127.0.0.1",
+        "exit_criteria": "A user can paste an MT700 and an invoice and see the findings with highlights"
+      },
+      {
+        "id": "LC-5",
+        "name": "AI explanation and officer decision",
+        "do": "For each finding, ask the model to explain it in one or two plain sentences using only the two values and their surrounding text. Check that any quoted text exists in the source. Let the officer mark each finding as accepted discrepancy, not a discrepancy, or needs more information, and save the decision.",
+        "deliverable": "Explanations and a saved decision per finding",
+        "exit_criteria": "Explanations never invent values; decisions are stored and shown again after a restart"
+      },
+      {
+        "id": "LC-6",
+        "name": "Measure and write the result",
+        "do": "Run all test pairs. Record per error type how many were found (recall) and how many wrong flags there were (precision), plus time per check.",
+        "deliverable": "lc_check_results.md",
+        "exit_criteria": "Numbers for every error type; a list of what was missed and why"
+      }
+    ],
+    "test_plan": "Run all seeded-error pairs, report recall and precision for each error type, and record the time per check.",
+    "open_questions": [
+      "Besides the documents, does the company also give a typed copy of the LC that must be checked?",
+      "Which documents should version 1 cover after the commercial invoice (bill of lading, packing list, certificate of origin)?",
+      "Which discrepancy rules and tolerances does the bank apply (and which written policy should be followed)?",
+      "Do real documents arrive as scans, text PDFs or Word files?",
+      "How are MT707 amendments delivered and should the tool apply them automatically?"
+    ]
+  }
+}

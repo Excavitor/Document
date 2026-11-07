@@ -1,0 +1,448 @@
+{
+  "project": "Local AI Document Assistant",
+  "document_type": "Project context (why, what, constraints, decisions, future access)",
+  "version": "1.1",
+  "date": "2026-11-07",
+  "owner_role": "Student building a capstone project",
+  "summary": "A ChatGPT-like web application that runs completely on local hardware. Users upload documents, ask questions, compare documents, find name mismatches and missing information, and get AI answers. Its first real use case is checking a local company's Letter of Credit (LC) documents against the SWIFT LC, where the SWIFT LC is the source of truth. No document, prompt, embedding or response leaves the machine or the organisation.",
+  "why_this_project": {
+    "reason": "Cloud AI services send documents and prompts to outside companies. That is not acceptable for sensitive material, especially in a bank. The aim is to prove that a useful AI document assistant can run fully under local control.",
+    "problems_it_solves": [
+      "Staff need quick answers from long documents.",
+      "Checking documents by hand for name mismatches, wrong numbers and missing information is slow and error-prone.",
+      "Cloud AI tools create privacy, security and compliance risks for confidential data."
+    ],
+    "capstone_value": "Shows a complete, honest, tested system: private AI inference, document processing, retrieval, comparison, and security thinking."
+  },
+  "goals": {
+    "main_goal": "Build a private, offline AI document assistant that could later be deployed inside a bank.",
+    "user_features": [
+      "Chat with a local AI model in a ChatGPT-like web page",
+      "Upload PDF, DOCX, XLSX and image files",
+      "Keep uploaded documents in a local library and select earlier uploads for new questions",
+      "Ask questions about selected documents and get answers with page references",
+      "Compare documents",
+      "Detect name mismatches and other differences",
+      "Identify missing information",
+      "Keep conversations and document details after restart",
+      "LC check: compare a company's LC documents against the SWIFT LC (source of truth) and point to the exact mismatches"
+    ],
+    "success_criteria": [
+      "The full workflow works with the network disconnected.",
+      "A packet capture shows no traffic from the application to outside the machine or the bank network.",
+      "Answers cite their source document and page, and say 'not found' when the evidence is missing.",
+      "Name and field mismatch detection is measured with known test errors (precision and recall).",
+      "Response speed is measured on the real hardware and judged acceptable.",
+      "On invented LC test pairs with seeded errors, the LC check finds each error type with measured precision and recall and points to the exact text."
+    ]
+  },
+  "requirements": {
+    "mandatory": [
+      "Complete offline operation",
+      "Maximum privacy and security",
+      "No external AI APIs and no cloud inference",
+      "No data sent to model providers, inference providers or other third parties",
+      "English language only",
+      "Support PDF, DOCX, XLSX and images",
+      "Django backend",
+      "ChatGPT-like frontend",
+      "Local database for conversations, messages, document details and document selection",
+      "Local document storage",
+      "Users can select previously uploaded documents for future analysis",
+      "Support retrieval (RAG) and document comparison",
+      "Prefer free and open-source software with commercially usable licences",
+      "Avoid unnecessary components and services",
+      "Full control over the inference engine: an open-weight model run by a locally controlled engine that needs no cloud connection"
+    ]
+  },
+  "current_hardware_and_os": {
+    "cpu": "AMD Ryzen 5 3400G (4 cores, 8 threads, AVX2, no AVX-512)",
+    "ram": "32 GB DDR4",
+    "gpu": "No dedicated GPU (integrated Vega graphics only)",
+    "inference": "CPU only",
+    "current_os": "Windows",
+    "planned_os_later": "Linux (Debian stable or Ubuntu LTS) for a bank-grade deployment",
+    "note": "Measured on this PC: the model reads about 25 tokens per second and writes about 8 to 9.5 tokens per second in a real chat. Reading long prompts is the slow part, so the design keeps prompts short and does heavy reading at upload time."
+  },
+  "current_stage": {
+    "name": "Stage 1: local AI test page, then the LC check page",
+    "description": "Phases 0 to 2 are done: the model runs locally and its speed is measured. Next: build the normal Django test page (Phases 3 and 4), then the LC check page, all with no login, on this one PC. Login comes after the LC check works.",
+    "focus_os": "Windows",
+    "plan_file": "local_ai_test_page_plan.json",
+    "status": {
+      "phase_0_prepare_pc": "done",
+      "phase_1_run_model_alone": "done",
+      "phase_2_measure_speed": "done (optional Vulkan test skipped)",
+      "phase_3_minimal_django_page": "next",
+      "phase_4_streaming_settings_timing": "not started",
+      "lc_check_v1": "planned right after Phase 4",
+      "phase_5_offline_check": "not started (a basic offline test already passed in Phase 1)",
+      "phase_6_save_chats": "optional",
+      "phase_7_compare_models": "later (Gemma 4 26B-A4B test)"
+    },
+    "order_decision": "Do the LC check before any authentication, because the aim is to show the main value quickly. Add login before anyone else can reach the app."
+  },
+  "chosen_technology": {
+    "inference_engine": "llama.cpp llama-server on 127.0.0.1 (MIT licence)",
+    "first_model_to_test": "Qwen3 4B, Q4_K_M (tested and working; keep unless a later comparison shows a better fit)",
+    "model_to_compare": "Gemma 4 26B-A4B (listed as Apache 2.0; test speed and quality before choosing)",
+    "model_choice_rule": "Keep the smallest model that is accurate and fast enough on the project's own test documents.",
+    "embedding_models_to_test": [
+      "Qwen3-Embedding-0.6B",
+      "bge-small-en-v1.5"
+    ],
+    "backend": "Django",
+    "frontend": "Django templates, plain JavaScript and HTMX where useful, with all files hosted locally (no CDN)",
+    "database_now": "SQLite (only if chat history is saved in Stage 1)",
+    "database_later": "PostgreSQL with pgvector (one service for normal data, full-text search and vectors)",
+    "pdf_parsing": "pdfplumber or pypdfium2 (avoid PyMuPDF because of its AGPL licence)",
+    "office_parsing": [
+      "python-docx",
+      "openpyxl (values only, no macros)"
+    ],
+    "ocr": "Tesseract first; test RapidOCR or PaddleOCR on real scans",
+    "document_comparison": "Python rules plus RapidFuzz for names; the AI only explains results and checks free-text clauses. For LC checks the SWIFT MT700 is parsed by field tag in Python.",
+    "file_storage": "Private local folder, files named by SHA-256 hash, on an encrypted disk",
+    "project_layout": {
+      "git_project_folder": "C:\\Users\\My Local PC\\Desktop\\Selim\\Document",
+      "virtual_environment": ".venvDocument (inside the project folder)",
+      "large_files_outside_git": "C:\\local-ai\\llama.cpp and C:\\local-ai\\models",
+      "notes_folder": "notes (model_register.md, test_prompts.md)"
+    }
+  },
+  "key_decisions_and_reasons": [
+    {
+      "decision": "Use llama.cpp instead of Ollama or Hugging Face Transformers",
+      "reason": "Smallest and most controllable engine for CPU use. You choose the exact model file and build, and there is no model-download or account code to keep switched off."
+    },
+    {
+      "decision": "PostgreSQL + pgvector later, not SQLite + ChromaDB",
+      "reason": "One service handles data and search. ChromaDB would be a second store to keep in sync, and a move to PostgreSQL would be needed later anyway."
+    },
+    {
+      "decision": "Document comparison is done by code, not by the AI",
+      "reason": "Code does not misread numbers. It is repeatable and auditable. The AI only explains the result."
+    },
+    {
+      "decision": "Do slow document reading at upload time",
+      "reason": "Reading long text is the slowest step on this CPU."
+    },
+    {
+      "decision": "Start with a small test page with no login",
+      "reason": "Prove that the model works and is fast enough before building features around it."
+    },
+    {
+      "decision": "Show source page images and confidence for extracted names, dates and amounts",
+      "reason": "OCR can read a value wrongly, and then the code would compare the wrong value. The user confirms low-confidence values."
+    },
+    {
+      "decision": "Parse the SWIFT LC (MT700) by field tag in Python instead of asking the AI to read it",
+      "reason": "MT700 has fixed numbered fields, so code reads it exactly. The AI would be slower on this CPU and could misread numbers."
+    },
+    {
+      "decision": "Build the LC check before login and the other big features",
+      "reason": "It is the main value of the project and can be shown quickly on one PC with invented data. Login is added before anyone else can reach it."
+    },
+    {
+      "decision": "The tool flags and classifies mismatches, and a trade-finance officer decides",
+      "reason": "Some differences are allowed by trade rules, and the bank's own policy decides what counts as a discrepancy."
+    },
+    {
+      "decision": "Keep Qwen3 4B Q4_K_M with 8 threads for now",
+      "reason": "Measured: accurate on all 6 test questions, about 25 tokens/s reading and 8 to 9.5 tokens/s writing, only 4.6 GB RAM."
+    }
+  ],
+  "privacy_and_security_approach": {
+    "principle": "Offline is a network fact, not a software setting. Use several layers and test them.",
+    "layers": [
+      "No internet route for the server; outbound traffic blocked",
+      "Model server and Django listen on 127.0.0.1 only (on a single PC)",
+      "No cloud APIs, telemetry, CDNs or remote fonts and scripts",
+      "Software and models downloaded once, checked by hash and licence, then used offline",
+      "Environment flags that switch off online features (defence in depth only)",
+      "Sandboxed document parsing with limits on size and time",
+      "Encrypted disk and backups; no document text or prompts in logs",
+      "Offline test with the network cable unplugged, plus packet capture"
+    ],
+    "windows_note": "On Windows, use Windows Firewall outbound block rules for the program files and BitLocker for disk encryption. This proves that the project's own programs do not send data out, but Windows itself still uses the internet when connected. A bank-level guarantee needs Linux and network controls."
+  },
+  "future_remote_access": {
+    "question": "Can the AI run on a server so other computers, including other places or other countries of the same bank, can use it?",
+    "answer": "Yes. Run the application on a server inside the bank network. Staff open the web page from their own computers. The AI model itself stays on the server.",
+    "scenarios": [
+      {
+        "scenario": "Other computers in the same office or building",
+        "how": "Users reach the Django web page through Nginx over HTTPS on the internal network.",
+        "requirements": [
+          "Login required",
+          "HTTPS with an internal certificate",
+          "Server firewall allows only the web port from the office network"
+        ]
+      },
+      {
+        "scenario": "Same country, different branch or city",
+        "how": "Users connect over the bank's private WAN or VPN to the same server.",
+        "requirements": [
+          "Bank VPN or private link",
+          "Single sign-on and roles",
+          "Audit log of who used which document"
+        ]
+      },
+      {
+        "scenario": "Different country, same bank",
+        "how": "Users connect through the bank's private international network or VPN, never the public internet.",
+        "requirements": [
+          "Legal and compliance approval for cross-border access to customer data",
+          "Check data-residency rules of each country",
+          "Per-user and per-document access control",
+          "Encrypted connections between sites"
+        ]
+      }
+    ],
+    "design_rules": [
+      "Only the web application is reachable by users. The model server stays on loopback and is never exposed.",
+      "The server still has no route to the public internet.",
+      "The no-login test page is for a single local PC only. Add login and roles before anyone else can reach it.",
+      "Never log or share prompts and document text in clear form.",
+      "Use the bank's identity system (OIDC or LDAP) when available."
+    ],
+    "capacity_note": "The current CPU can serve about one question at a time, so other users would wait in a queue. For many users, use a stronger server, ideally with a GPU, and size it by concurrent users and prompt length.",
+    "target_architecture_later": {
+      "browsers": "Staff computers on the bank network",
+      "entry": "Nginx with HTTPS",
+      "application": "Django app and background worker",
+      "data": "PostgreSQL with pgvector, encrypted file storage, encrypted backups",
+      "ai": "llama.cpp servers on a separate inference host, reachable only from the application host",
+      "controls": "SSO, roles, audit log sent to the bank's logging system, signed internal software mirror, model register, security testing"
+    }
+  },
+  "growth_path": [
+    {
+      "stage": 1,
+      "name": "Local AI test page (Windows, no login)",
+      "outcome": "Model answers in a Django page with streaming and timing. Phases 0 to 2 done."
+    },
+    {
+      "stage": 2,
+      "name": "LC check v1 (no login, invented data)",
+      "outcome": "Paste a SWIFT MT700 and a company invoice; see mismatches with exact highlights"
+    },
+    {
+      "stage": 3,
+      "name": "Upload TXT, Word and text PDF files",
+      "outcome": "Upload instead of pasting for the LC check and for questions"
+    },
+    {
+      "stage": 4,
+      "name": "More documents and OCR",
+      "outcome": "Bill of lading, packing list, scanned pages and images with page references"
+    },
+    {
+      "stage": 5,
+      "name": "Document library and selecting earlier uploads",
+      "outcome": "Delete removes files and all extracted data"
+    },
+    {
+      "stage": 6,
+      "name": "Retrieval (RAG) with local embeddings",
+      "outcome": "Answers with citations and 'not found' behaviour"
+    },
+    {
+      "stage": 7,
+      "name": "General document comparison",
+      "outcome": "Reuse the LC comparison code for other document pairs"
+    },
+    {
+      "stage": 8,
+      "name": "Login, roles, hardening, then Linux server",
+      "outcome": "Shared access for other computers and other sites"
+    },
+    {
+      "stage": 9,
+      "name": "Bank-oriented deployment",
+      "outcome": "Separate hosts, SSO, audit, model governance, security review"
+    }
+  ],
+  "risks_and_limits": [
+    "Answer quality is below large cloud AI models, especially for long and complex documents.",
+    "On this CPU, long prompts take minutes; about one active user at a time.",
+    "English only; no handwriting; weak on complex tables, charts, stamps and signatures.",
+    "OCR digit and name errors can enter comparisons, so evidence and human review are needed.",
+    "Retrieval can ignore permissions if it is built wrongly; test with two users.",
+    "Prompt injection inside documents; the model gets no tools or web access.",
+    "A capstone demo does not qualify the system for real bank customer data. That needs legal, security, privacy, operations and model-risk review.",
+    "LC rules are detailed. The tool supports a trade-finance officer and must not be treated as the final decision maker."
+  ],
+  "licence_notes": [
+    "Apache 2.0 and MIT software and models allow commercial use; keep the licence text and notices.",
+    "Models with custom licences (such as Llama, or Gemma versions before 4) add conditions; avoid them unless legal approves.",
+    "Check the licence of the exact model file and library version you use, and record it in a model register.",
+    "Some banks also have rules about where a model comes from; keep an option from a different origin."
+  ],
+  "related_files": {
+    "architecture_and_roadmap_doc": "Local AI Document Assistant: Architecture and Roadmap (full comparison of engines, models, security and bank architecture)",
+    "practical_mvp_proposal": "Chat_Local_AI_Document_Assistant_Practical_MVP_Architecture.md (a simpler MVP proposal from another AI, compared and merged in the main document)",
+    "stage_1_plan": "local_ai_test_page_plan.json",
+    "diagram": "architecture.png",
+    "model_register": "notes/model_register.md",
+    "test_questions": "notes/test_prompts.md (6 questions on an invented bank document)",
+    "lc_plan": "lc_check_plan section in local_ai_test_page_plan.json"
+  },
+  "open_questions": [
+    "How many users and sites will use it in the bank, and how many at the same time?",
+    "Which countries are involved, and what are their data-residency rules?",
+    "Does the bank have its own list of approved models and software?",
+    "Does the bank require a specific identity system (OIDC, LDAP) and logging system?",
+    "Besides the documents, does the company also give a typed copy of the LC that must be checked?",
+    "Which documents should version 1 cover after the commercial invoice (bill of lading, packing list, certificate of origin)?",
+    "Which discrepancy rules and tolerances does the bank apply (and which written policy should be followed)?",
+    "Do real documents arrive as scans, text PDFs or Word files?",
+    "How are MT707 amendments delivered and should the tool apply them automatically?"
+  ],
+  "primary_use_case": {
+    "name": "LC check (Letter of Credit document check)",
+    "why": "Banks must check the documents a local company presents against the Letter of Credit that a foreign bank sent by SWIFT. Doing this by hand is slow and mistakes are costly. The tool should find mismatches quickly and point to the exact place on both sides.",
+    "when_to_build": "Right after the normal Django frontend (Phases 3 and 4) works, and before any login or authentication system. The no-login version is only for one local PC with synthetic test data.",
+    "source_of_truth": "The SWIFT LC (usually an MT700 message), plus any later amendments (MT707). Apply the amendments first, then compare.",
+    "side_to_check": "The documents the local company presents (start with the commercial invoice; later bill of lading, packing list, certificate of origin and others that field 46A requires).",
+    "flow": [
+      "Foreign (issuing) bank sends the LC as an MT700 to the local bank",
+      "Local bank advises it to the local company (the exporter)",
+      "Company prepares documents and presents them to the local bank",
+      "Local bank checks the documents against the SWIFT LC and reports discrepancies"
+    ],
+    "design_idea": "A separate LC Check page with two panes: the SWIFT LC (truth) on the left and the company document (to be checked) on the right, with a findings list in the middle or below. Clicking a finding highlights the matching text on both sides.",
+    "core_approach": [
+      "MT700 is structured, so parse it by field tag with Python (not with the AI).",
+      "Extract the matching fields from the company document with rules first, and use the AI only where text is free-form.",
+      "Compare field by field in Python with explicit rules (exact, numeric tolerance, fuzzy name, date rules, normalised match).",
+      "Use the AI only for free-text clauses (goods description, additional conditions) and to explain each finding in plain words, and always check that the quoted evidence really exists in the source text.",
+      "Show evidence (page and position) for every finding. A human trade-finance officer makes the final decision."
+    ],
+    "fields_to_compare_v1": [
+      {
+        "field": "Documentary credit number",
+        "swift_tag": "20",
+        "compare": "exact"
+      },
+      {
+        "field": "Currency and amount",
+        "swift_tag": "32B",
+        "compare": "currency exact; amount numeric, with the tolerance allowed by tag 39A if present"
+      },
+      {
+        "field": "Applicant (buyer)",
+        "swift_tag": "50",
+        "compare": "normalised and fuzzy name match; flag any difference for review"
+      },
+      {
+        "field": "Beneficiary (seller)",
+        "swift_tag": "59",
+        "compare": "normalised and fuzzy name match; flag any difference for review"
+      },
+      {
+        "field": "Expiry date and place",
+        "swift_tag": "31D",
+        "compare": "date rule (document dates must be on or before expiry)"
+      },
+      {
+        "field": "Latest date of shipment",
+        "swift_tag": "44C",
+        "compare": "date rule"
+      },
+      {
+        "field": "Port of loading / port of discharge",
+        "swift_tag": "44E, 44F",
+        "compare": "normalised place-name match"
+      },
+      {
+        "field": "Description of goods",
+        "swift_tag": "45A",
+        "compare": "AI check with quoted evidence, plus rules for quantity, unit price and total; officer reviews"
+      },
+      {
+        "field": "Documents required",
+        "swift_tag": "46A",
+        "compare": "checklist: is each required document present"
+      },
+      {
+        "field": "Additional conditions",
+        "swift_tag": "47A",
+        "compare": "AI check of each condition with quoted evidence; always shown to the officer"
+      },
+      {
+        "field": "Partial shipments / transhipment",
+        "swift_tag": "43P, 43T",
+        "compare": "condition check against the shipping document"
+      },
+      {
+        "field": "Presentation period",
+        "swift_tag": "48",
+        "compare": "date rule"
+      }
+    ],
+    "finding_statuses": [
+      "MATCH",
+      "MINOR_VARIATION",
+      "MISMATCH",
+      "MISSING",
+      "NEEDS_REVIEW"
+    ],
+    "cautions": [
+      "Not every difference is a real discrepancy. Trade rules allow some tolerance, so the tool flags and classifies; the officer decides.",
+      "The exact discrepancy rules and tolerances must come from the bank's own trade-finance policy and the standard rules it follows (for example UCP 600 practice). Confirm them with a trade-finance officer before treating results as final.",
+      "OCR errors can create false mismatches, so show the page image beside each finding and a confidence score.",
+      "Use only invented (synthetic) LCs and documents for development and testing. Never use real customer data on this test setup.",
+      "The tag list above is the common MT700 field set and must be confirmed against the bank's SWIFT message guide."
+    ],
+    "speed_note": "The model reads about 25 tokens per second on this PC (measured). Every AI call on a 600-token document costs roughly 25 seconds of reading before the first word (calculated from the measured speed). So do as much as possible in Python and call the AI only for a few free-text fields.",
+    "steps_overview": [
+      "LC-0: Make synthetic test data",
+      "LC-1: MT700 parser",
+      "LC-2: Extract fields from the company document",
+      "LC-3: Comparison engine",
+      "LC-4: LC Check page (no login yet)",
+      "LC-5: AI explanation and officer decision",
+      "LC-6: Measure and write the result"
+    ],
+    "open_questions": [
+      "Besides the documents, does the company also give a typed copy of the LC that must be checked?",
+      "Which documents should version 1 cover after the commercial invoice (bill of lading, packing list, certificate of origin)?",
+      "Which discrepancy rules and tolerances does the bank apply (and which written policy should be followed)?",
+      "Do real documents arrive as scans, text PDFs or Word files?",
+      "How are MT707 amendments delivered and should the tool apply them automatically?"
+    ]
+  },
+  "measured_performance": {
+    "date": "2026-11-07",
+    "model": "Qwen3 4B Q4_K_M (ggml-org/Qwen3-4B-GGUF, Apache 2.0 as shown on the model page)",
+    "engine": "llama.cpp build 12186, CPU backend ggml-cpu-haswell.dll (AVX2), llama-server on 127.0.0.1:8080",
+    "server_settings": "-c 4096 -t 8 -np 1; end each question with /no_think to skip the thinking part",
+    "llama_bench": {
+      "threads_4": {
+        "pp512": 22.23,
+        "pp2048": 19.43,
+        "tg128": 10.26
+      },
+      "threads_8": {
+        "pp512": 27.35,
+        "pp2048": 26.25,
+        "tg128": 12.68
+      },
+      "unit": "tokens per second"
+    },
+    "real_chat": {
+      "reading_speed": "about 25 tokens per second on larger prompts",
+      "writing_speed": "about 8 to 9.5 tokens per second",
+      "first_word_wait_for_500_token_document": "about 21 seconds",
+      "follow_up_wait": "3 to 5 seconds (earlier text is cached)"
+    },
+    "peak_ram_llama_server": "4.6 GB",
+    "test_result": "All 6 test questions were answered correctly on a 400-word invented bank document, including saying the document does not name a nominee.",
+    "offline": "Worked with the internet off. netstat showed 127.0.0.1:8080 LISTENING only.",
+    "limits_seen": [
+      "The model reads text only. The built-in chat page refuses image uploads; images and scans will go through OCR first.",
+      "Context size is set by -c (4096 now), not by any outside limit."
+    ]
+  }
+}
