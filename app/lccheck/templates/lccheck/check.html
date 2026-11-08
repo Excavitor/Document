@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LC Check</title>
+  <style>
+    :root {
+      --bg: #ffffff; --fg: #1f1f1f; --muted: #5f6368; --line: #d5d8dc; --panel: #f6f7f9; --accent: #1a6fd6; --accent-fg: #ffffff;
+      --match-bg: #e6f4ea;  --match-fg: #14532d;
+      --minor-bg: #e8f0fe;  --minor-fg: #1e3a8a;
+      --bad-bg: #fde7e9;    --bad-fg: #8a1020;
+      --miss-bg: #ffe9d6;   --miss-fg: #8a3b00;
+      --rev-bg: #fff4cc;    --rev-fg: #6b4e00;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16181c; --fg: #e8eaed; --muted: #a0a4ab; --line: #3a3f46; --panel: #1e2126; --accent: #5b9bf0; --accent-fg: #0b1220;
+        --match-bg: #12301f;  --match-fg: #b7e4c7;
+        --minor-bg: #1b2a4a;  --minor-fg: #bcd0ff;
+        --bad-bg: #4a1a20;    --bad-fg: #ffc2c9;
+        --miss-bg: #4a2a12;   --miss-fg: #ffd2ad;
+        --rev-bg: #4a3d10;    --rev-fg: #ffe9a0;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, "Segoe UI", Arial, sans-serif; line-height: 1.45; }
+    main { max-width: 1240px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+    .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 800px) { .panes { grid-template-columns: 1fr; } }
+    .pane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+    .pane h2 { font-size: 15px; margin: 0 0 8px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+    textarea { width: 100%; font: 13px/1.4 ui-monospace, Consolas, monospace; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); resize: vertical; }
+    #lc { height: 300px; } #invoice { height: 420px; } .amd textarea { height: 110px; }
+    button, select { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+    button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-size: 15px; padding: 9px 26px; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+    .amd-head { display: flex; justify-content: space-between; align-items: center; }
+    .amd-head button { padding: 2px 8px; font-size: 12px; }
+    .actions { margin: 16px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    #error { color: var(--bad-fg); background: var(--bad-bg); border-radius: 6px; padding: 8px 12px; display: none; }
+    #results { display: none; }
+    .strip { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 10px; }
+    .strip div + div { margin-top: 3px; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+    .chip { padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+    .note-box { border-radius: 6px; padding: 8px 12px; margin: 8px 0; font-size: 13px; background: var(--rev-bg); color: var(--rev-fg); }
+    .skip-box { font-size: 12px; color: var(--muted); margin: 8px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; vertical-align: top; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; }
+    td.val { overflow-wrap: anywhere; }
+    .tag { color: var(--muted); font-size: 11px; }
+    .ev { color: var(--muted); font-size: 12px; margin-top: 4px; font-family: ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .s-MATCH { background: var(--match-bg); color: var(--match-fg); }
+    .s-MINOR_VARIATION { background: var(--minor-bg); color: var(--minor-fg); }
+    .s-MISMATCH { background: var(--bad-bg); color: var(--bad-fg); }
+    .s-MISSING { background: var(--miss-bg); color: var(--miss-fg); }
+    .s-NEEDS_REVIEW { background: var(--rev-bg); color: var(--rev-fg); }
+    tr.row-MATCH td { color: var(--muted); }
+    .hide-match tr.row-MATCH { display: none; }
+    .none { color: var(--muted); font-style: italic; }
+    .foot { color: var(--muted); font-size: 12px; margin-top: 18px; }
+    nav a { font-size: 13px; color: var(--accent); }
+  </style>
+</head>
+<body>
+<main>
+  <nav><a href="/">&larr; Chat test page</a></nav>
+  <h1>LC Check</h1>
+  <p class="sub">Runs fully on this PC. The LC is the source of truth. This tool points at differences; the officer decides.</p>
+  {% csrf_token %}
+
+  <div class="panes">
+    <section class="pane" aria-labelledby="lc-title">
+      <h2 id="lc-title">LC (SWIFT MT700)</h2>
+      <div class="bar"><button type="button" id="load-lc">Load sample LC + amendment</button></div>
+      <label for="lc">LC text</label>
+      <textarea id="lc" spellcheck="false" placeholder="Paste the MT700 text here (lines like :20:LC2026100045)"></textarea>
+      <div id="amendments"></div>
+      <div class="bar"><button type="button" id="add-amd">+ Add amendment (MT707)</button></div>
+    </section>
+
+    <section class="pane" aria-labelledby="inv-title">
+      <h2 id="inv-title">Commercial invoice</h2>
+      <div class="bar">
+        <select id="sample-invoice" aria-label="Load a test invoice">
+          <option value="">Load a test invoice...</option>
+          <option value="invoice_ok">Correct invoice</option>
+          <option value="invoice_a">Invoice A (3 errors)</option>
+          <option value="invoice_b">Invoice B (4 errors)</option>
+        </select>
+      </div>
+      <label for="invoice">Invoice text</label>
+      <textarea id="invoice" spellcheck="false" placeholder="Paste the invoice text here (lines like Invoice No: ...)"></textarea>
+    </section>
+  </div>
+
+  <div class="actions">
+    <button type="button" class="primary" id="check">Check</button>
+    <button type="button" id="clear">Clear all</button>
+    <span id="busy" class="sub" style="margin:0"></span>
+  </div>
+  <div id="error" role="alert"></div>
+
+  <section id="results" aria-live="polite">
+    <div class="strip" id="lcinfo"></div>
+    <div class="chips" id="chips"></div>
+    <div id="warnings"></div>
+    <label style="display:inline-flex;gap:6px;align-items:center;margin:4px 0 8px">
+      <input type="checkbox" id="show-match" checked> Show matching rows
+    </label>
+    <table id="table">
+      <thead><tr><th style="width:140px">Status</th><th style="width:150px">Field</th><th>LC says</th><th>Invoice shows</th><th>Note and evidence</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="skip-box" id="skipped"></div>
+  </section>
+
+  <p class="foot">Test data only. Do not paste real customer documents until access control is in place.</p>
+</main>
+
+<script>
+  const LABEL = { MATCH: "Match", MINOR_VARIATION: "Minor variation", MISMATCH: "Mismatch", MISSING: "Missing", NEEDS_REVIEW: "Needs review" };
+  const ORDER = { MISMATCH: 0, MISSING: 1, NEEDS_REVIEW: 2, MINOR_VARIATION: 3, MATCH: 4 };
+  const csrf = document.querySelector("[name=csrfmiddlewaretoken]").value;
+  const $ = (id) => document.getElementById(id);
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined && text !== null) e.textContent = text;   // never innerHTML
+    return e;
+  }
+
+  // ---- amendment boxes ----
+  function renumber() {
+    document.querySelectorAll("#amendments .amd").forEach((box, i) => {
+      box.querySelector("label").textContent = "Amendment " + (i + 1) + " (MT707, optional)";
+    });
+  }
+  function addAmendment(text) {
+    const box = el("div", "amd");
+    const head = el("div", "amd-head");
+    const label = el("label", null, "");
+    const remove = el("button", null, "Remove");
+    remove.type = "button";
+    remove.addEventListener("click", () => { box.remove(); renumber(); });
+    head.append(label, remove);
+    const ta = el("textarea");
+    ta.spellcheck = false;
+    ta.placeholder = "Paste the MT707 text here";
+    ta.value = text || "";
+    box.append(head, ta);
+    $("amendments").append(box);
+    renumber();
+  }
+  function amendmentTexts() {
+    return Array.from(document.querySelectorAll("#amendments textarea")).map(t => t.value);
+  }
+  function clearAmendments() { $("amendments").replaceChildren(); }
+
+  $("add-amd").addEventListener("click", () => addAmendment(""));
+
+  // ---- samples ----
+  async function sample(name) {
+    const resp = await fetch("/lc/sample?name=" + encodeURIComponent(name));
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Sample not found.");
+    return data.text;
+  }
+  $("load-lc").addEventListener("click", async () => {
+    try {
+      $("lc").value = await sample("lc");
+      clearAmendments();
+      addAmendment(await sample("amendment"));
+      showError("");
+    } catch (e) { showError(e.message); }
+  });
+  $("sample-invoice").addEventListener("change", async (ev) => {
+    if (!ev.target.value) return;
+    try { $("invoice").value = await sample(ev.target.value); showError(""); }
+    catch (e) { showError(e.message); }
+    ev.target.value = "";
+  });
+
+  // ---- clear ----
+  $("clear").addEventListener("click", () => {
+    $("lc").value = ""; $("invoice").value = "";
+    clearAmendments();
+    showError(""); $("results").style.display = "none";
+  });
+
+  function showError(msg) {
+    const box = $("error");
+    box.textContent = msg;
+    box.style.display = msg ? "block" : "none";
+  }
+
+  // ---- results ----
+  function valueCell(text) {
+    const td = el("td", "val");
+    if (text === null || text === undefined || text === "") td.append(el("span", "none", "not shown"));
+    else td.textContent = text;
+    return td;
+  }
+
+  function render(data) {
+    const info = data.lc_info;
+    const strip = $("lcinfo");
+    strip.replaceChildren();
+    strip.append(el("div", null, info.lc_number + "  |  " + info.amount + "  |  Latest shipment " + info.latest_shipment + "  |  Expiry " + info.expiry));
+    strip.append(el("div", null, "Applicant (buyer): " + info.applicant + "  |  Beneficiary (seller): " + info.beneficiary));
+    if (info.amendments.length) {
+      info.amendments.forEach(a => {
+        strip.append(el("div", null, "Amendment " + a.number + " applied: " + (a.changes.length ? a.changes.join("; ") : "no field changed")));
+      });
+    } else {
+      strip.append(el("div", null, "No amendments applied."));
+    }
+
+    const chips = $("chips");
+    chips.replaceChildren();
+    Object.keys(ORDER).sort((a, b) => ORDER[a] - ORDER[b]).forEach(s => {
+      const n = data.summary[s] || 0;
+      chips.append(el("span", "chip s-" + s, LABEL[s] + ": " + n));
+    });
+
+    const warnings = $("warnings");
+    warnings.replaceChildren();
+    data.warnings.forEach(w => warnings.append(el("div", "note-box", w)));
+
+    const rows = $("rows");
+    rows.replaceChildren();
+    const sorted = data.results.map((r, i) => [r, i]).sort((x, y) => (ORDER[x[0].status] - ORDER[y[0].status]) || (x[1] - y[1]));
+    sorted.forEach(([r]) => {
+      const tr = el("tr", "row-" + r.status);
+      const st = el("td"); st.append(el("span", "badge s-" + r.status, LABEL[r.status] || r.status));
+      const field = el("td"); field.append(el("div", null, r.label), el("div", "tag", "LC tag " + r.lc_tag));
+      const note = el("td");
+      if (r.note) note.append(el("div", null, r.note));
+      if (r.evidence) note.append(el("div", "ev", r.evidence));
+      tr.append(st, field, valueCell(r.lc_value), valueCell(r.doc_value), note);
+      rows.append(tr);
+    });
+
+    const skipped = $("skipped");
+    skipped.replaceChildren();
+    if (data.skipped.length) {
+      skipped.textContent = "Not compared: " + data.skipped.map(s => s.field + " (" + s.reason + ")").join("; ");
+    }
+    $("results").style.display = "block";
+    $("results").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  $("show-match").addEventListener("change", (ev) => {
+    $("table").classList.toggle("hide-match", !ev.target.checked);
+  });
+
+  $("check").addEventListener("click", async () => {
+    showError("");
+    const btn = $("check");
+    btn.disabled = true;
+    $("busy").textContent = "Checking...";
+    try {
+      const resp = await fetch("/lc/api/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+        body: JSON.stringify({ lc: $("lc").value, amendments: amendmentTexts(), invoice: $("invoice").value }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        $("results").style.display = "none";
+        showError(data.error || "Something went wrong.");
+      } else {
+        render(data);
+      }
+    } catch (e) {
+      showError("Could not reach the Django server.");
+    } finally {
+      btn.disabled = false;
+      $("busy").textContent = "";
+    }
+  });
+</script>
+</body>
+</html>
