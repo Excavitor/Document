@@ -1,0 +1,40 @@
+{
+  "note": "Synthetic data. Expected results are the 'right answers' for measuring the LC check later (precision and recall). Tolerance rules and statuses must be confirmed with a trade-finance officer.",
+  "lc": "mt700_lc2026100045.txt",
+  "amendment": "mt707_amendment_1.txt",
+  "statuses": ["MATCH", "MINOR_VARIATION", "MISMATCH", "MISSING", "NEEDS_REVIEW"],
+  "cases": [
+    {
+      "file": "invoice_ok.txt",
+      "expected_issues_without_amendment": [],
+      "expected_issues_with_amendment": []
+    },
+    {
+      "file": "invoice_a_errors.txt",
+      "expected_issues_without_amendment": [
+        {"field": "buyer_name", "lc_tag": "50", "lc_value": "NORTHSTAR IMPORTS LTD", "document_value": "NORTHSTAR IMPORT LTD", "expected_status": "MINOR_VARIATION"},
+        {"field": "lc_number", "lc_tag": "20", "lc_value": "LC2026100045", "document_value": "LC2026100054", "expected_status": "MISMATCH"},
+        {"field": "currency", "lc_tag": "32B", "lc_value": "USD", "document_value": "EUR", "expected_status": "MISMATCH"}
+      ],
+      "expected_issues_with_amendment": "same as without amendment (the amendment only changes the shipment date)"
+    },
+    {
+      "file": "invoice_b_errors.txt",
+      "expected_issues_without_amendment": [
+        {"field": "goods_description", "lc_tag": "45A", "lc_value": "COTTON, 100 PERCENT COTTON", "document_value": "POLYESTER, 100 PERCENT POLYESTER", "expected_status": "MISMATCH"},
+        {"field": "shipment_date", "lc_tag": "44C", "lc_value": "latest 15 December 2026", "document_value": "20 December 2026", "expected_status": "MISMATCH"},
+        {"field": "lc_number", "lc_tag": "47A", "lc_value": "LC2026100045", "document_value": null, "expected_status": "MISSING"},
+        {"field": "lc_date", "lc_tag": "47A", "lc_value": "01 October 2026", "document_value": null, "expected_status": "MISSING"}
+      ],
+      "expected_issues_with_amendment": [
+        {"field": "goods_description", "expected_status": "MISMATCH"},
+        {"field": "lc_number", "expected_status": "MISSING"},
+        {"field": "lc_date", "expected_status": "MISSING"}
+      ],
+      "must_not_be_flagged": [
+        {"field": "quantity", "lc_value": "5000 pieces, tolerance 5 percent", "document_value": "5,150 pieces", "expected_status": "MATCH (within tolerance)"},
+        {"field": "amount", "lc_value": "USD 125,000.00, tolerance 5 percent (max USD 131,250.00)", "document_value": "USD 128,750.00", "expected_status": "MATCH (within tolerance)"}
+      ]
+    }
+  ]
+}

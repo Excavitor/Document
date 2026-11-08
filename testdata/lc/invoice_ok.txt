@@ -1,0 +1,37 @@
+COMMERCIAL INVOICE
+SYNTHETIC TEST DATA. ALL NAMES AND NUMBERS ARE INVENTED.
+
+Invoice No: BKL/INV/2026/0412
+Invoice Date: 20 November 2026
+
+Seller (Exporter):
+BENGAL KNITWEAR LIMITED
+PLOT 17, SECTOR 3, UTTARA
+DHAKA, BANGLADESH
+
+Buyer (Applicant):
+NORTHSTAR IMPORTS LTD
+45 HARBOUR ROAD
+LONDON, UNITED KINGDOM
+
+Letter of Credit No: LC2026100045
+Letter of Credit Date: 01 October 2026
+Issuing Bank: EXAMPLE BANK PLC, LONDON
+
+Port of Loading: CHITTAGONG, BANGLADESH
+Port of Discharge: FELIXSTOWE, UNITED KINGDOM
+Date of Shipment: 25 November 2026
+Terms of Delivery: CIF FELIXSTOWE
+
+Proforma Invoice: PI-7781 dated 15 September 2026
+
+Description of Goods                                                   Quantity        Unit Price     Amount
+MEN'S COTTON KNITTED T-SHIRTS, STYLE NO. TS-2201, 100 PERCENT COTTON   5,000 PIECES    USD 25.00      USD 125,000.00
+
+Total Amount: USD 125,000.00
+Amount in words: United States Dollars one hundred twenty-five thousand only.
+
+We certify that this invoice is true and correct.
+
+Signed: M. Hasan, Authorised Signatory
+BENGAL KNITWEAR LIMITED

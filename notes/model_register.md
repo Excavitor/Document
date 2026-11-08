@@ -100,3 +100,8 @@ Versions: Python 3.12.5, Django 6.1.3, requests 2.34.2 (venv .venvDocument).
 - With --no-webui, http://127.0.0.1:8080/ returns 404 "File Not Found". The Django page still works.
 - Django calls llama-server only through chat/llm_client.py, so the model can be swapped later.
 - Next: Phase 4 (streaming, Stop button, timing), then LC check v1.
+
+## Phase 4 results (2026-11-08)
+- Streaming works: words appear as the model writes them.
+- Stop button works: text stays, status shows "Stopped."
+- Timing shown at the end: first word, total time, tokens/s.
