@@ -12,7 +12,8 @@
     .row { display: flex; gap: 16px; flex-wrap: wrap; }
     .row div { flex: 1; min-width: 160px; }
     button { margin-top: 12px; padding: 8px 18px; font: inherit; border: 0; border-radius: 6px; background: #1a6fd6; color: #fff; cursor: pointer; }
-    button:disabled { background: #9ab8e0; cursor: wait; }
+    button.stop { background: #c62828; }
+    button:disabled { background: #9ab8e0; cursor: not-allowed; }
     #answer { white-space: pre-wrap; border: 1px solid #ddd; border-radius: 6px; padding: 12px; min-height: 80px; margin-top: 16px; background: #fafafa; }
     #status { font-size: 13px; color: #555; margin-top: 8px; }
     .error { color: #b00020 !important; }
@@ -40,31 +41,48 @@
   <label for="message">Your question</label>
   <textarea id="message" rows="6" placeholder="Type or paste text here..."></textarea>
   <button id="send">Send</button>
+  <button id="stop" class="stop" disabled>Stop</button>
 
   <div id="status"></div>
   <div id="answer"></div>
 
   <script>
     const sendBtn = document.getElementById("send");
+    const stopBtn = document.getElementById("stop");
     const answerEl = document.getElementById("answer");
     const statusEl = document.getElementById("status");
     const csrf = document.querySelector("[name=csrfmiddlewaretoken]").value;
+    let controller = null;
+
+    function setStatus(text, isError) {
+      statusEl.className = isError ? "error" : "";
+      statusEl.textContent = text;
+    }
+
+    function setBusy(busy) {
+      sendBtn.disabled = busy;
+      stopBtn.disabled = !busy;
+    }
+
+    stopBtn.addEventListener("click", () => {
+      if (controller) controller.abort();
+    });
 
     sendBtn.addEventListener("click", async () => {
       const message = document.getElementById("message").value.trim();
-      statusEl.className = "";
-      if (!message) {
-        statusEl.className = "error";
-        statusEl.textContent = "Please type a question.";
-        return;
-      }
-      sendBtn.disabled = true;
+      if (!message) { setStatus("Please type a question.", true); return; }
+
+      setBusy(true);
       answerEl.textContent = "";
-      statusEl.textContent = "Model is thinking... this can take a minute on this PC.";
+      setStatus("Reading your question... the first word can take a while on this PC.");
+      controller = new AbortController();
+      let gotFirst = false;
+
       try {
-        const resp = await fetch("/api/chat", {
+        const resp = await fetch("/api/chat/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+          signal: controller.signal,
           body: JSON.stringify({
             message: message,
             system: document.getElementById("system").value,
@@ -72,19 +90,47 @@
             max_tokens: Number(document.getElementById("max_tokens").value),
           }),
         });
-        const data = await resp.json();
-        if (!resp.ok || data.error) {
-          statusEl.className = "error";
-          statusEl.textContent = data.error || "Something went wrong.";
-        } else {
-          answerEl.textContent = data.reply;   // textContent, not innerHTML
-          statusEl.textContent = "Done in " + data.seconds + " s.";
+
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          setStatus(data.error || "Something went wrong.", true);
+          return;
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();            // keep the unfinished line
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const ev = JSON.parse(line);
+            if (ev.type === "token") {
+              if (!gotFirst) { gotFirst = true; setStatus("Writing..."); }
+              answerEl.textContent += ev.text;   // textContent, not innerHTML
+            } else if (ev.type === "done") {
+              const speed = ev.tokens_per_second ? " | " + ev.tokens_per_second + " tokens/s" : "";
+              const first = ev.first_token !== null ? "First word " + ev.first_token + " s | " : "";
+              setStatus(first + "Total " + ev.seconds + " s" + speed);
+            } else if (ev.type === "error") {
+              setStatus(ev.message, true);
+            }
+          }
         }
       } catch (err) {
-        statusEl.className = "error";
-        statusEl.textContent = "Could not reach the Django server.";
+        if (err.name === "AbortError") {
+          setStatus("Stopped.");
+        } else {
+          setStatus("Could not reach the Django server.", true);
+        }
       } finally {
-        sendBtn.disabled = false;
+        controller = null;
+        setBusy(false);
       }
     });
   </script>
