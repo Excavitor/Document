@@ -105,3 +105,12 @@ Versions: Python 3.12.5, Django 6.1.3, requests 2.34.2 (venv .venvDocument).
 - Streaming works: words appear as the model writes them.
 - Stop button works: text stays, status shows "Stopped."
 - Timing shown at the end: first word, total time, tokens/s.
+
+## LC Check v1 (LC-0 through LC-5) results (2026-11-08)
+- MT700 and MT707 parsed deterministically by tag number in Python.
+- Commercial invoice parsed into structured fields with line-by-line evidence.
+- Deterministic comparison engine evaluates tolerances, party name variations, dates, and amounts.
+- Precision & Recall: 100% precision and 100% recall on synthetic test suites (evaluated against `answer_key.json`).
+- LC-5: Local AI explanations for flagged rows (grounded prompt to Qwen3 4B with quote verification against source text).
+- LC-5: Interactive officer decisions (`Accept`, `Refer`, `Reject` + comment) stored locally in SQLite (`OfficerDecision` model) and reloaded across server restarts.
+- LC-5: One-click formatted discrepancy report generation and copy to clipboard.

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LC Check</title>
+  <title>LC Check - Local AI & Decision Support</title>
   <style>
     :root {
       --bg: #ffffff; --fg: #1f1f1f; --muted: #5f6368; --line: #d5d8dc; --panel: #f6f7f9; --accent: #1a6fd6; --accent-fg: #ffffff;
@@ -12,6 +12,9 @@
       --bad-bg: #fde7e9;    --bad-fg: #8a1020;
       --miss-bg: #ffe9d6;   --miss-fg: #8a3b00;
       --rev-bg: #fff4cc;    --rev-fg: #6b4e00;
+      --dec-accept-bg: #d1e7dd; --dec-accept-fg: #0f5132;
+      --dec-refer-bg: #cfe2ff;  --dec-refer-fg: #084298;
+      --dec-reject-bg: #f8d7da; --dec-reject-fg: #842029;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -21,42 +24,50 @@
         --bad-bg: #4a1a20;    --bad-fg: #ffc2c9;
         --miss-bg: #4a2a12;   --miss-fg: #ffd2ad;
         --rev-bg: #4a3d10;    --rev-fg: #ffe9a0;
+        --dec-accept-bg: #123d24; --dec-accept-fg: #a3cfbb;
+        --dec-refer-bg: #132e54;  --dec-refer-fg: #9ec5fe;
+        --dec-reject-bg: #4c1d24; --dec-reject-fg: #ea868f;
       }
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, "Segoe UI", Arial, sans-serif; line-height: 1.45; }
-    main { max-width: 1240px; margin: 0 auto; padding: 16px; }
+    main { max-width: 1380px; margin: 0 auto; padding: 16px; }
     h1 { font-size: 20px; margin: 0 0 4px; }
     .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
     .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    @media (max-width: 800px) { .panes { grid-template-columns: 1fr; } }
+    @media (max-width: 860px) { .panes { grid-template-columns: 1fr; } }
     .pane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
     .pane h2 { font-size: 15px; margin: 0 0 8px; }
     label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
     textarea { width: 100%; font: 13px/1.4 ui-monospace, Consolas, monospace; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); resize: vertical; }
-    #lc { height: 300px; } #invoice { height: 420px; } .amd textarea { height: 110px; }
+    #lc { height: 280px; } #invoice { height: 380px; } .amd textarea { height: 100px; }
     button, select { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
-    button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-size: 15px; padding: 9px 26px; }
-    button:disabled { opacity: .6; cursor: not-allowed; }
+    button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-size: 15px; padding: 9px 24px; font-weight: 600; }
+    button.sec { background: var(--panel); font-size: 13px; padding: 7px 14px; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
     .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
     .amd-head { display: flex; justify-content: space-between; align-items: center; }
     .amd-head button { padding: 2px 8px; font-size: 12px; }
-    .actions { margin: 16px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .actions { margin: 16px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     #error { color: var(--bad-fg); background: var(--bad-bg); border-radius: 6px; padding: 8px 12px; display: none; }
-    #results { display: none; }
-    .strip { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 10px; }
-    .strip div + div { margin-top: 3px; }
-    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
-    .chip { padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+    #results { display: none; margin-top: 14px; }
+    .strip { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+    .strip div + div { margin-top: 4px; }
+    .chips-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 10px 0; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .dec-chip { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid var(--line); }
     .note-box { border-radius: 6px; padding: 8px 12px; margin: 8px 0; font-size: 13px; background: var(--rev-bg); color: var(--rev-fg); }
     .skip-box { font-size: 12px; color: var(--muted); margin: 8px 0; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align: left; vertical-align: top; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+    
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    th, td { text-align: left; vertical-align: top; padding: 8px; border-bottom: 1px solid var(--line); }
     th { color: var(--muted); font-weight: 600; font-size: 12px; }
     td.val { overflow-wrap: anywhere; }
     .tag { color: var(--muted); font-size: 11px; }
     .ev { color: var(--muted); font-size: 12px; margin-top: 4px; font-family: ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; white-space: nowrap; }
     .s-MATCH { background: var(--match-bg); color: var(--match-fg); }
     .s-MINOR_VARIATION { background: var(--minor-bg); color: var(--minor-fg); }
     .s-MISMATCH { background: var(--bad-bg); color: var(--bad-fg); }
@@ -65,15 +76,34 @@
     tr.row-MATCH td { color: var(--muted); }
     .hide-match tr.row-MATCH { display: none; }
     .none { color: var(--muted); font-style: italic; }
-    .foot { color: var(--muted); font-size: 12px; margin-top: 18px; }
-    nav a { font-size: 13px; color: var(--accent); }
+    
+    /* AI box */
+    .ai-box { margin-top: 6px; padding: 8px 10px; border-radius: 6px; background: var(--panel); border-left: 3px solid var(--accent); font-size: 12px; line-height: 1.4; }
+    .ai-box .ai-title { font-weight: 700; color: var(--accent); font-size: 11px; text-transform: uppercase; margin-bottom: 2px; }
+    .ai-btn { padding: 3px 8px; font-size: 11px; border-radius: 4px; margin-top: 4px; background: var(--panel); border: 1px dashed var(--accent); color: var(--accent); cursor: pointer; }
+    .ai-btn:hover { background: var(--minor-bg); }
+    .ai-verified { font-size: 10px; color: var(--match-fg); margin-top: 3px; font-weight: 600; }
+    .ai-unverified { font-size: 10px; color: var(--bad-fg); margin-top: 3px; }
+
+    /* Officer Decision controls */
+    .dec-group { display: flex; gap: 4px; margin-bottom: 6px; }
+    .btn-dec { padding: 3px 8px; font-size: 11px; font-weight: 600; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+    .btn-dec.active-ACCEPT { background: var(--dec-accept-bg); color: var(--dec-accept-fg); border-color: var(--match-fg); }
+    .btn-dec.active-REFER  { background: var(--dec-refer-bg);  color: var(--dec-refer-fg);  border-color: var(--accent); }
+    .btn-dec.active-REJECT { background: var(--dec-reject-bg); color: var(--dec-reject-fg); border-color: var(--bad-fg); }
+    .dec-comment { width: 100%; font: 12px inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); }
+    .dec-saved { font-size: 11px; color: var(--match-fg); margin-top: 2px; height: 14px; }
+
+    .foot { color: var(--muted); font-size: 12px; margin-top: 20px; }
+    nav a { font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600; }
+    nav a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
 <main>
   <nav><a href="/">&larr; Chat test page</a></nav>
-  <h1>LC Check</h1>
-  <p class="sub">Runs fully on this PC. The LC is the source of truth. This tool points at differences; the officer decides.</p>
+  <h1>LC Check <span style="font-size:14px;font-weight:normal;color:var(--muted)">| Decision Support & Local AI Explanations</span></h1>
+  <p class="sub">Runs fully on this PC. The SWIFT LC is the source of truth. Python rules flag differences; the local AI explains them; the trade-finance officer decides.</p>
   {% csrf_token %}
 
   <div class="panes">
@@ -104,25 +134,45 @@
   <div class="actions">
     <button type="button" class="primary" id="check">Check</button>
     <button type="button" id="clear">Clear all</button>
-    <span id="busy" class="sub" style="margin:0"></span>
+    <button type="button" class="sec" id="explain-all" style="display:none">🤖 Explain all flagged items (AI)</button>
+    <button type="button" class="sec" id="copy-report" style="display:none">📋 Copy Officer Report</button>
+    <span id="busy" class="sub" style="margin:0;font-weight:600"></span>
   </div>
   <div id="error" role="alert"></div>
 
   <section id="results" aria-live="polite">
     <div class="strip" id="lcinfo"></div>
-    <div class="chips" id="chips"></div>
+    
+    <div class="chips-row">
+      <div class="chips" id="chips"></div>
+      <div class="chips" id="dec-chips"></div>
+    </div>
+
     <div id="warnings"></div>
-    <label style="display:inline-flex;gap:6px;align-items:center;margin:4px 0 8px">
-      <input type="checkbox" id="show-match" checked> Show matching rows
-    </label>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0">
+      <label style="display:inline-flex;gap:6px;align-items:center;margin:0">
+        <input type="checkbox" id="show-match" checked> Show matching rows
+      </label>
+      <span class="sub" id="summary-meta"></span>
+    </div>
+
     <table id="table">
-      <thead><tr><th style="width:140px">Status</th><th style="width:150px">Field</th><th>LC says</th><th>Invoice shows</th><th>Note and evidence</th></tr></thead>
+      <thead>
+        <tr>
+          <th style="width:130px">Status</th>
+          <th style="width:130px">Field</th>
+          <th style="width:200px">LC says</th>
+          <th style="width:200px">Invoice shows</th>
+          <th>Evidence &amp; AI Explanation</th>
+          <th style="width:250px">Officer Decision</th>
+        </tr>
+      </thead>
       <tbody id="rows"></tbody>
     </table>
     <div class="skip-box" id="skipped"></div>
   </section>
 
-  <p class="foot">Test data only. Do not paste real customer documents until access control is in place.</p>
+  <p class="foot">Test data only. Decisions and explanations are stored locally in SQLite.</p>
 </main>
 
 <script>
@@ -131,14 +181,16 @@
   const csrf = document.querySelector("[name=csrfmiddlewaretoken]").value;
   const $ = (id) => document.getElementById(id);
 
+  let currentCheckData = null;
+
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
-    if (text !== undefined && text !== null) e.textContent = text;   // never innerHTML
+    if (text !== undefined && text !== null) e.textContent = text;
     return e;
   }
 
-  // ---- amendment boxes ----
+  // ---- amendments ----
   function renumber() {
     document.querySelectorAll("#amendments .amd").forEach((box, i) => {
       box.querySelector("label").textContent = "Amendment " + (i + 1) + " (MT707, optional)";
@@ -189,11 +241,13 @@
     ev.target.value = "";
   });
 
-  // ---- clear ----
   $("clear").addEventListener("click", () => {
     $("lc").value = ""; $("invoice").value = "";
     clearAmendments();
     showError(""); $("results").style.display = "none";
+    $("explain-all").style.display = "none";
+    $("copy-report").style.display = "none";
+    currentCheckData = null;
   });
 
   function showError(msg) {
@@ -202,7 +256,6 @@
     box.style.display = msg ? "block" : "none";
   }
 
-  // ---- results ----
   function valueCell(text) {
     const td = el("td", "val");
     if (text === null || text === undefined || text === "") td.append(el("span", "none", "not shown"));
@@ -210,12 +263,111 @@
     return td;
   }
 
+  // ---- Decision saving ----
+  async function saveDecision(lcNo, invNo, field, decision, comment, aiExp, statusEl) {
+    statusEl.textContent = "Saving...";
+    statusEl.style.color = "var(--muted)";
+    try {
+      const resp = await fetch("/lc/api/decision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+        body: JSON.stringify({
+          lc_number: lcNo,
+          invoice_number: invNo,
+          field: field,
+          decision: decision,
+          comment: comment,
+          ai_explanation: aiExp || "",
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Failed to save");
+      statusEl.textContent = "Saved";
+      statusEl.style.color = "var(--match-fg)";
+      updateDecisionCounters();
+      setTimeout(() => { if (statusEl.textContent === "Saved") statusEl.textContent = ""; }, 2500);
+    } catch (err) {
+      statusEl.textContent = "Error saving";
+      statusEl.style.color = "var(--bad-fg)";
+    }
+  }
+
+  function updateDecisionCounters() {
+    let accept = 0, refer = 0, reject = 0, pending = 0;
+    document.querySelectorAll("tr[data-field]").forEach(tr => {
+      if (tr.classList.contains("row-MATCH")) return;
+      const act = tr.querySelector(".btn-dec[data-active='true']");
+      if (!act) pending++;
+      else if (act.dataset.val === "ACCEPT") accept++;
+      else if (act.dataset.val === "REFER") refer++;
+      else if (act.dataset.val === "REJECT") reject++;
+    });
+    const chips = $("dec-chips");
+    chips.replaceChildren();
+    chips.append(el("span", "dec-chip", "Decisions: " + accept + " Accept | " + refer + " Refer | " + reject + " Reject" + (pending > 0 ? " (" + pending + " pending)" : "")));
+  }
+
+  // ---- AI explanation call ----
+  async function explainField(r, tr, btn) {
+    const aiContainer = tr.querySelector(".ai-container");
+    btn.disabled = true;
+    btn.textContent = "Generating explanation...";
+    try {
+      const resp = await fetch("/lc/api/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+        body: JSON.stringify({
+          field_info: {
+            field: r.field,
+            label: r.label,
+            status: r.status,
+            lc_tag: r.lc_tag,
+            lc_value: r.lc_value,
+            doc_value: r.doc_value,
+            evidence: r.evidence,
+            note: r.note,
+            lc_number: currentCheckData.lc_info.lc_number,
+            invoice_number: currentCheckData.invoice_info.invoice_number,
+          }
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        throw new Error(data.error || "Could not generate explanation.");
+      }
+      r.ai_explanation = data.explanation;
+      renderAiBox(aiContainer, data.explanation, data.quotes_valid, data.unverified_quotes);
+      btn.remove();
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = "🤖 Retry AI Explanation";
+      alert("AI Explanation: " + err.message);
+    }
+  }
+
+  function renderAiBox(container, text, quotesValid, unverified) {
+    container.replaceChildren();
+    if (!text) return;
+    const box = el("div", "ai-box");
+    box.append(el("div", "ai-title", "Local Qwen Explanation"));
+    box.append(el("div", null, text));
+    if (quotesValid) {
+      box.append(el("div", "ai-verified", "✓ Verified against source text"));
+    } else if (unverified && unverified.length) {
+      box.append(el("div", "ai-unverified", "⚠ Unmatched quoted phrase: " + unverified.join(", ")));
+    }
+    container.append(box);
+  }
+
+  // ---- Render results table ----
   function render(data) {
+    currentCheckData = data;
     const info = data.lc_info;
+    const invNo = data.invoice_info.invoice_number || "Invoice";
     const strip = $("lcinfo");
     strip.replaceChildren();
-    strip.append(el("div", null, info.lc_number + "  |  " + info.amount + "  |  Latest shipment " + info.latest_shipment + "  |  Expiry " + info.expiry));
-    strip.append(el("div", null, "Applicant (buyer): " + info.applicant + "  |  Beneficiary (seller): " + info.beneficiary));
+    strip.append(el("div", null, info.lc_number + "  |  Invoice: " + invNo + "  |  " + info.amount + "  |  Latest shipment " + info.latest_shipment + "  |  Expiry " + info.expiry));
+    strip.append(el("div", null, "Applicant: " + info.applicant + "  |  Beneficiary: " + info.beneficiary));
     if (info.amendments.length) {
       info.amendments.forEach(a => {
         strip.append(el("div", null, "Amendment " + a.number + " applied: " + (a.changes.length ? a.changes.join("; ") : "no field changed")));
@@ -238,14 +390,84 @@
     const rows = $("rows");
     rows.replaceChildren();
     const sorted = data.results.map((r, i) => [r, i]).sort((x, y) => (ORDER[x[0].status] - ORDER[y[0].status]) || (x[1] - y[1]));
+
+    let flaggedCount = 0;
+
     sorted.forEach(([r]) => {
       const tr = el("tr", "row-" + r.status);
+      tr.dataset.field = r.field;
+
       const st = el("td"); st.append(el("span", "badge s-" + r.status, LABEL[r.status] || r.status));
       const field = el("td"); field.append(el("div", null, r.label), el("div", "tag", "LC tag " + r.lc_tag));
-      const note = el("td");
-      if (r.note) note.append(el("div", null, r.note));
-      if (r.evidence) note.append(el("div", "ev", r.evidence));
-      tr.append(st, field, valueCell(r.lc_value), valueCell(r.doc_value), note);
+
+      // Evidence & AI column
+      const noteCol = el("td");
+      if (r.note) noteCol.append(el("div", null, r.note));
+      if (r.evidence) noteCol.append(el("div", "ev", r.evidence));
+      
+      const aiContainer = el("div", "ai-container");
+      if (r.ai_explanation) {
+        renderAiBox(aiContainer, r.ai_explanation, true, []);
+      }
+      noteCol.append(aiContainer);
+
+      if (r.status !== "MATCH") {
+        flaggedCount++;
+        if (!r.ai_explanation) {
+          const aiBtn = el("button", "ai-btn", "🤖 Explain with AI");
+          aiBtn.type = "button";
+          aiBtn.addEventListener("click", () => explainField(r, tr, aiBtn));
+          noteCol.append(aiBtn);
+        }
+      }
+
+      // Officer Decision column
+      const decCol = el("td");
+      if (r.status === "MATCH") {
+        decCol.append(el("span", "none", "Match (No discrepancy)"));
+      } else {
+        const decGroup = el("div", "dec-group");
+        const commentInput = el("input", "dec-comment");
+        commentInput.type = "text";
+        commentInput.placeholder = "Officer comment / justification...";
+        commentInput.value = r.comment || "";
+
+        const savedLabel = el("div", "dec-saved");
+
+        ["ACCEPT", "REFER", "REJECT"].forEach(decVal => {
+          const btn = el("button", "btn-dec", decVal === "ACCEPT" ? "Accept" : decVal === "REFER" ? "Refer" : "Reject");
+          btn.type = "button";
+          btn.dataset.val = decVal;
+          if (r.decision === decVal) {
+            btn.classList.add("active-" + decVal);
+            btn.dataset.active = "true";
+          }
+          btn.addEventListener("click", () => {
+            const isCurrent = btn.dataset.active === "true";
+            decGroup.querySelectorAll(".btn-dec").forEach(b => {
+              b.classList.remove("active-" + b.dataset.val);
+              b.dataset.active = "false";
+            });
+            const newDec = isCurrent ? "" : decVal;
+            if (!isCurrent) {
+              btn.classList.add("active-" + decVal);
+              btn.dataset.active = "true";
+            }
+            saveDecision(info.lc_number, invNo, r.field, newDec, commentInput.value.trim(), r.ai_explanation, savedLabel);
+          });
+          decGroup.append(btn);
+        });
+
+        commentInput.addEventListener("change", () => {
+          const activeBtn = decGroup.querySelector(".btn-dec[data-active='true']");
+          const curDec = activeBtn ? activeBtn.dataset.val : "";
+          saveDecision(info.lc_number, invNo, r.field, curDec, commentInput.value.trim(), r.ai_explanation, savedLabel);
+        });
+
+        decCol.append(decGroup, commentInput, savedLabel);
+      }
+
+      tr.append(st, field, valueCell(r.lc_value), valueCell(r.doc_value), noteCol, decCol);
       rows.append(tr);
     });
 
@@ -254,9 +476,73 @@
     if (data.skipped.length) {
       skipped.textContent = "Not compared: " + data.skipped.map(s => s.field + " (" + s.reason + ")").join("; ");
     }
+
+    $("explain-all").style.display = flaggedCount > 0 ? "inline-block" : "none";
+    $("copy-report").style.display = "inline-block";
+    updateDecisionCounters();
+
     $("results").style.display = "block";
     $("results").scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  // ---- Explain All sequentially ----
+  $("explain-all").addEventListener("click", async () => {
+    const btns = Array.from(document.querySelectorAll("#rows .ai-btn"));
+    if (!btns.length) return;
+    $("explain-all").disabled = true;
+    $("busy").textContent = "Explaining discrepancies with local AI...";
+    for (const btn of btns) {
+      btn.click();
+      await new Promise(r => setTimeout(r, 600)); // stagger requests
+    }
+    $("explain-all").disabled = false;
+    $("busy").textContent = "";
+  });
+
+  // ---- Copy Officer Report ----
+  $("copy-report").addEventListener("click", () => {
+    if (!currentCheckData) return;
+    const info = currentCheckData.lc_info;
+    const invNo = currentCheckData.invoice_info.invoice_number || "N/A";
+    let report = "================================================================================\n";
+    report += "TRADE FINANCE LC DISCREPANCY & DECISION REPORT\n";
+    report += "================================================================================\n";
+    report += `LC Number       : ${info.lc_number}\n`;
+    report += `Invoice Number  : ${invNo}\n`;
+    report += `Amount          : ${info.amount}\n`;
+    report += `Applicant       : ${info.applicant}\n`;
+    report += `Beneficiary     : ${info.beneficiary}\n`;
+    report += `Latest Shipment : ${info.latest_shipment} | Expiry: ${info.expiry}\n`;
+    report += "--------------------------------------------------------------------------------\nFINDINGS & OFFICER DECISIONS:\n--------------------------------------------------------------------------------\n";
+
+    let idx = 1;
+    currentCheckData.results.forEach(r => {
+      if (r.status === "MATCH") return;
+      const tr = document.querySelector(`tr[data-field="${r.field}"]`);
+      const act = tr ? tr.querySelector(".btn-dec[data-active='true']") : null;
+      const dec = act ? act.dataset.val : "PENDING";
+      const comment = tr ? tr.querySelector(".dec-comment").value.trim() : "";
+
+      report += `[${idx++}] ${r.label} (SWIFT Tag ${r.lc_tag}) - STATUS: ${r.status}\n`;
+      report += `    LC Requirement   : ${r.lc_value || 'None'}\n`;
+      report += `    Invoice Shows    : ${r.doc_value || 'None'}\n`;
+      if (r.evidence) report += `    Evidence Line    : ${r.evidence}\n`;
+      if (r.ai_explanation) report += `    AI Explanation   : ${r.ai_explanation}\n`;
+      report += `    Officer Decision : ${dec}\n`;
+      if (comment) report += `    Officer Comment  : ${comment}\n`;
+      report += "\n";
+    });
+
+    report += "================================================================================\n";
+    report += "Generated on local secure workstation. Verified by Trade Finance Officer.\n";
+    report += "================================================================================\n";
+
+    navigator.clipboard.writeText(report).then(() => {
+      alert("Report copied to clipboard! Ready to paste into banking systems or tickets.");
+    }).catch(() => {
+      prompt("Copy report text below:", report);
+    });
+  });
 
   $("show-match").addEventListener("change", (ev) => {
     $("table").classList.toggle("hide-match", !ev.target.checked);

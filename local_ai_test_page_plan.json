@@ -620,8 +620,10 @@
     "phase_0": "done 2026-11-07",
     "phase_1": "done 2026-11-07",
     "phase_2": "done 2026-11-07 (optional Vulkan test skipped)",
-    "phase_3": "next",
-    "later": "not started"
+    "phase_3": "done 2026-11-08",
+    "phase_4": "done 2026-11-08",
+    "lc_check_v1": "done 2026-11-08 (LC-0 to LC-5 complete)",
+    "phase_5": "next"
   },
   "recommended_order": [
     "Phase 3: minimal Django test page",

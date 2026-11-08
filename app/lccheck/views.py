@@ -7,7 +7,9 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 
 from .compare import STATUSES, _fmt, compare_invoice
+from .explain import generate_explanation
 from .invoice import parse_invoice
+from .models import OfficerDecision
 from .mt700 import LCParseError, apply_mt707, parse_mt700
 
 MAX_CHARS = 100_000      # per pasted text
@@ -22,6 +24,8 @@ SAMPLES = {
     "invoice_a": "invoice_a_errors.txt",
     "invoice_b": "invoice_b_errors.txt",
 }
+
+VALID_DECISIONS = {"", "ACCEPT", "REFER", "REJECT"}
 
 
 def _error(message, status=400):
@@ -101,4 +105,104 @@ def api_check(request):
     result["error"] = None
     result["lc_info"] = _lc_info(lc)
     result["statuses"] = STATUSES
+
+    # Look up previously saved officer decisions for this LC & invoice pair
+    lc_num = lc.get("lc_number", "")
+    inv_num = (invoice["fields"].get("invoice_number") or {}).get("value") or ""
+    result["invoice_info"] = {"invoice_number": inv_num}
+
+    saved_decisions = {
+        d.field: {
+            "decision": d.decision,
+            "comment": d.comment,
+            "ai_explanation": d.ai_explanation,
+        }
+        for d in OfficerDecision.objects.filter(lc_number=lc_num, invoice_number=inv_num)
+    }
+
+    decision_summary = {"ACCEPT": 0, "REFER": 0, "REJECT": 0, "PENDING": 0}
+    for r in result["results"]:
+        saved = saved_decisions.get(r["field"])
+        r["decision"] = saved["decision"] if saved else ""
+        r["comment"] = saved["comment"] if saved else ""
+        r["ai_explanation"] = saved["ai_explanation"] if saved else ""
+        if r["status"] != "MATCH":
+            if r["decision"] in decision_summary:
+                decision_summary[r["decision"]] += 1
+            else:
+                decision_summary["PENDING"] += 1
+
+    result["decision_summary"] = decision_summary
+    return JsonResponse(result)
+
+
+@require_POST
+def api_decision(request):
+    """Save an officer's decision and comment for a finding."""
+    try:
+        body = json.loads(request.body)
+    except ValueError:
+        return _error("Bad request.")
+
+    lc_number = (body.get("lc_number") or "").strip()
+    invoice_number = (body.get("invoice_number") or "").strip()
+    field = (body.get("field") or "").strip()
+    decision = (body.get("decision") or "").strip().upper()
+    comment = (body.get("comment") or "").strip()
+    ai_explanation = (body.get("ai_explanation") or "").strip()
+
+    if not lc_number or not field:
+        return _error("lc_number and field are required.")
+    if decision not in VALID_DECISIONS:
+        return _error(f"Invalid decision '{decision}'. Must be one of: ACCEPT, REFER, REJECT, or empty.")
+
+    record, _ = OfficerDecision.objects.update_or_create(
+        lc_number=lc_number,
+        invoice_number=invoice_number,
+        field=field,
+        defaults={
+            "decision": decision,
+            "comment": comment,
+            "ai_explanation": ai_explanation,
+        },
+    )
+
+    return JsonResponse({
+        "status": "ok",
+        "lc_number": record.lc_number,
+        "invoice_number": record.invoice_number,
+        "field": record.field,
+        "decision": record.decision,
+        "comment": record.comment,
+        "ai_explanation": record.ai_explanation,
+        "updated_at": record.updated_at.isoformat(),
+    })
+
+
+@require_POST
+def api_explain(request):
+    """Generate an AI explanation for a finding using the local model."""
+    try:
+        body = json.loads(request.body)
+    except ValueError:
+        return _error("Bad request.")
+
+    field_info = body.get("field_info") or body
+    field = (field_info.get("field") or "").strip()
+    if not field:
+        return _error("field is required.")
+
+    result = generate_explanation(field_info)
+
+    # If explanation succeeded and lc_number is provided, persist it in OfficerDecision
+    lc_number = (field_info.get("lc_number") or "").strip()
+    invoice_number = (field_info.get("invoice_number") or "").strip()
+    if result["explanation"] and lc_number:
+        OfficerDecision.objects.update_or_create(
+            lc_number=lc_number,
+            invoice_number=invoice_number,
+            field=field,
+            defaults={"ai_explanation": result["explanation"]},
+        )
+
     return JsonResponse(result)
